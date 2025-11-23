@@ -1,1 +1,1 @@
-# todoist-ai-ranker
+# Todoist AI Ranker
