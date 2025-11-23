@@ -1,0 +1,16 @@
+# Todoist Integration
+todoist-api-python>=2.1.4
+
+# AI Integration
+openai>=1.50.0
+
+# Configuration & Environment
+python-dotenv>=1.0.0
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+
+# Error Handling & Utilities
+tenacity>=9.0.0
+
+# Logging
+structlog>=24.4.0
