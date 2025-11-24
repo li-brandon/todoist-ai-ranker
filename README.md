@@ -120,12 +120,8 @@ python -m src.main --filter "p1 & @work"
 
 ### Combined Options
 
-````bash
-### Combined Options
-
 ```bash
 python -m src.main --dry-run --filter "today" --label "important" --verbose
-````
 
 ### Verbose Output
 
