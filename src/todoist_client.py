@@ -5,7 +5,7 @@ import logging
 import structlog
 import requests
 from collections import deque
-from typing import List, Optional, Any, Dict
+from typing import List, Optional
 from tenacity import (
     retry,
     stop_after_attempt,
