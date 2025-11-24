@@ -4,7 +4,6 @@ import sys
 import logging
 import structlog
 from typing import Optional
-from pathlib import Path
 
 from .config import get_settings
 from .todoist_client import TodoistClient
