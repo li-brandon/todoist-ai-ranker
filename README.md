@@ -10,8 +10,8 @@ Automatically prioritize your Todoist tasks using AI. This Python script fetches
 - 🔒 **Safe**: Dry-run mode to preview changes before applying
 - 🎨 **Flexible Filtering**: Filter by project, label, or custom queries
 - ⚡ **Rate Limited**: Respects API rate limits with automatic throttling
-- � **Scalable**: Uses batching to handle hundreds of tasks without hitting AI token limits
-- �🛡️ **Robust**: Built-in retry logic and error handling
+- 📈 **Scalable**: Uses batching to handle hundreds of tasks without hitting AI token limits
+- 🛡️ **Robust**: Built-in retry logic and error handling
 
 ## Prerequisites
 
