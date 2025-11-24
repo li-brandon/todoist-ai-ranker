@@ -122,8 +122,19 @@ python -m src.main --filter "p1 & @work"
 
 ### Combined Options
 
+````bash
+### Combined Options
+
 ```bash
-python -m src.main --dry-run --filter "today" --label "important"
+python -m src.main --dry-run --filter "today" --label "important" --verbose
+````
+
+### Verbose Output
+
+To see the ranking details for every task:
+
+```bash
+python -m src.main --verbose
 ```
 
 ## How It Works

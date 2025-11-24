@@ -88,7 +88,8 @@ def main(
     dry_run: bool = False,
     project_id: Optional[str] = None,
     label: Optional[str] = None,
-    filter_query: Optional[str] = None
+    filter_query: Optional[str] = None,
+    verbose: bool = False
 ) -> int:
     """Main application logic.
     
@@ -97,6 +98,7 @@ def main(
         project_id: Optional project ID to filter tasks
         label: Optional label to filter tasks
         filter_query: Optional Todoist filter query
+        verbose: If True, show detailed output
         
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -140,6 +142,26 @@ def main(
             if count > 0:
                 print(f"     {level}: {count} task(s)")
         print()
+        
+        if verbose:
+            print("-" * 60)
+            print("  Ranked Tasks")
+            print("-" * 60 + "\n")
+            
+            # Sort by priority and score for display
+            display_list = []
+            for ranking in rankings.rankings:
+                task = next((t for t in tasks if t.id == ranking.task_id), None)
+                if task:
+                    display_list.append((task, ranking))
+            
+            display_list.sort(key=lambda x: (x[1].todoist_priority, x[1].priority_score), reverse=True)
+            
+            for task, ranking in display_list:
+                print(f"• {task.content[:60]}")
+                print(f"  {ranking.priority_level} (Score: {ranking.priority_score}) - {ranking.reasoning}")
+                print()
+            print("-" * 60 + "\n")
         
         # Show changes
         print_task_changes(tasks, rankings, dry_run)
@@ -240,6 +262,11 @@ if __name__ == "__main__":
         type=str,
         help="Todoist filter query (e.g., 'today | overdue')"
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show detailed output including all ranked tasks"
+    )
     
     args = parser.parse_args()
     
@@ -247,5 +274,6 @@ if __name__ == "__main__":
         dry_run=args.dry_run,
         project_id=args.project,
         label=args.label,
-        filter_query=args.filter
+        filter_query=args.filter,
+        verbose=args.verbose
     ))
