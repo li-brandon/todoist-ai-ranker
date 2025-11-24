@@ -10,7 +10,8 @@ Automatically prioritize your Todoist tasks using AI. This Python script fetches
 - 🔒 **Safe**: Dry-run mode to preview changes before applying
 - 🎨 **Flexible Filtering**: Filter by project, label, or custom queries
 - ⚡ **Rate Limited**: Respects API rate limits with automatic throttling
-- 🛡️ **Robust**: Built-in retry logic and error handling
+- � **Scalable**: Uses batching to handle hundreds of tasks without hitting AI token limits
+- �🛡️ **Robust**: Built-in retry logic and error handling
 
 ## Prerequisites
 
@@ -141,6 +142,7 @@ python -m src.main --verbose
 
 1. **Fetch Tasks**: Retrieves all active tasks from Todoist (with optional filtering)
 2. **AI Analysis**: Sends task details to OpenAI for intelligent prioritization
+   - **Batching**: Tasks are processed in batches of 20 to handle large lists efficiently and avoid token limits.
 3. **Priority Mapping**: Converts AI scores (0-100) to Todoist priorities:
    - **P1 (Urgent)**: Critical, time-sensitive tasks
    - **P2 (High)**: Important tasks with near-term deadlines

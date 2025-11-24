@@ -126,11 +126,12 @@ Tasks:
         
         return content
     
-    def rank_tasks(self, tasks: List[TodoistTask]) -> PriorityRankings:
-        """Rank tasks using AI.
+    def rank_tasks(self, tasks: List[TodoistTask], batch_size: int = 20) -> PriorityRankings:
+        """Rank tasks using AI with batching.
         
         Args:
             tasks: List of tasks to rank
+            batch_size: Number of tasks to process in one API call
             
         Returns:
             PriorityRankings object with AI-determined priorities
@@ -143,30 +144,49 @@ Tasks:
             return PriorityRankings(rankings=[])
         
         try:
-            self.logger.info("ranking_tasks", task_count=len(tasks))
+            all_rankings: List[TaskPriority] = []
             
-            # Build prompt
-            prompt = self._build_prompt(tasks)
+            # Split tasks into batches
+            for i in range(0, len(tasks), batch_size):
+                batch = tasks[i:i + batch_size]
+                self.logger.info(
+                    "processing_batch",
+                    batch_index=i // batch_size + 1,
+                    total_batches=(len(tasks) + batch_size - 1) // batch_size,
+                    batch_size=len(batch)
+                )
+                
+                try:
+                    # Build prompt for this batch
+                    prompt = self._build_prompt(batch)
+                    
+                    # Call OpenAI
+                    response_content = self._call_openai(prompt)
+                    
+                    # Parse JSON response
+                    try:
+                        response_data = json.loads(response_content)
+                    except json.JSONDecodeError as e:
+                        self.logger.error("json_parse_failed", error=str(e), content=response_content)
+                        continue  # Skip failed batch but try others
+                    
+                    # Validate with Pydantic
+                    try:
+                        batch_rankings = PriorityRankings(**response_data)
+                        all_rankings.extend(batch_rankings.rankings)
+                    except Exception as e:
+                        self.logger.error("validation_failed", error=str(e), data=response_data)
+                        continue
+                        
+                except Exception as e:
+                    self.logger.error("batch_failed", error=str(e))
+                    continue
             
-            # Call OpenAI
-            response_content = self._call_openai(prompt)
-            
-            # Parse JSON response
-            try:
-                response_data = json.loads(response_content)
-            except json.JSONDecodeError as e:
-                self.logger.error("json_parse_failed", error=str(e), content=response_content)
-                raise ValueError(f"Failed to parse AI response as JSON: {e}")
-            
-            # Validate with Pydantic
-            try:
-                rankings = PriorityRankings(**response_data)
-            except Exception as e:
-                self.logger.error("validation_failed", error=str(e), data=response_data)
-                raise ValueError(f"AI response validation failed: {e}")
+            # Create final combined rankings
+            final_rankings = PriorityRankings(rankings=all_rankings)
             
             # Verify all tasks got rankings
-            ranked_ids = {r.task_id for r in rankings.rankings}
+            ranked_ids = {r.task_id for r in final_rankings.rankings}
             task_ids = {t.id for t in tasks}
             
             if ranked_ids != task_ids:
@@ -175,15 +195,17 @@ Tasks:
                 self.logger.warning(
                     "ranking_mismatch",
                     missing_tasks=list(missing),
-                    extra_tasks=list(extra)
+                    extra_tasks=list(extra),
+                    ranked_count=len(ranked_ids),
+                    total_count=len(task_ids)
                 )
             
             self.logger.info(
                 "ranking_completed",
-                rankings_count=len(rankings.rankings)
+                rankings_count=len(final_rankings.rankings)
             )
             
-            return rankings
+            return final_rankings
             
         except Exception as e:
             self.logger.error("ranking_failed", error=str(e))
