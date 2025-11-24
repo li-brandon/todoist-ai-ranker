@@ -80,8 +80,6 @@ LOG_LEVEL=INFO                       # DEBUG, INFO, WARNING, ERROR
 ### Basic Usage
 
 Rank all your tasks:
-Rank all your tasks:
-
 ```bash
 ./run.sh
 # OR manually
