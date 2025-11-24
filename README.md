@@ -1,4 +1,5 @@
 # Todoist AI Ranker
+
 Automatically prioritize your Todoist tasks using AI. This Python script fetches your tasks, analyzes them with GPT, and updates priorities based on urgency, impact, effort, and due dates.
 
 ## Features
@@ -20,28 +21,33 @@ Automatically prioritize your Todoist tasks using AI. This Python script fetches
 ## Installation
 
 1. **Clone the repository**:
+
    ```bash
    git clone https://github.com/li-brandon/todoist-ai-ranker.git
    cd todoist-ai-ranker
    ```
 
 2. **Create a virtual environment** (recommended):
+
    ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
 3. **Install dependencies**:
+
    ```bash
    pip install -r requirements.txt
    ```
 
 4. **Configure environment variables**:
+
    ```bash
    cp .env.example .env
    ```
-   
+
    Edit `.env` and add your API keys:
+
    - **TODOIST_API_TOKEN**: Get from [Todoist Settings → Integrations](https://todoist.com/app/settings/integrations)
    - **OPENAI_API_KEY**: Get from [OpenAI API Keys](https://platform.openai.com/api-keys)
 
@@ -73,30 +79,42 @@ LOG_LEVEL=INFO                       # DEBUG, INFO, WARNING, ERROR
 ### Basic Usage
 
 Rank all your tasks:
+Rank all your tasks:
+
 ```bash
+./run.sh
+# OR manually
 python -m src.main
 ```
 
 ### Dry Run (Preview Only)
 
 See what changes would be made without updating:
+
+See what changes would be made without updating:
+
 ```bash
+./run.sh --dry-run
+# OR manually
 python -m src.main --dry-run
 ```
 
 ### Filter Tasks
 
 Rank tasks in a specific project:
+
 ```bash
 python -m src.main --project PROJECT_ID
 ```
 
 Rank tasks with a specific label:
+
 ```bash
 python -m src.main --label "work"
 ```
 
 Use Todoist filter syntax:
+
 ```bash
 python -m src.main --filter "today | overdue"
 python -m src.main --filter "p1 & @work"
@@ -122,12 +140,14 @@ python -m src.main --dry-run --filter "today" --label "important"
 ## Priority System
 
 Todoist uses an inverse priority system:
+
 - P1 = Priority 4 (Urgent) - Red flag
-- P2 = Priority 3 (High) - Orange flag  
+- P2 = Priority 3 (High) - Orange flag
 - P3 = Priority 2 (Medium) - Yellow flag
 - P4 = Priority 1 (Normal) - No flag
 
 The AI considers:
+
 - ⏰ **Urgency**: Time-sensitive nature of the task
 - 📅 **Due Date**: Proximity to deadline
 - 💪 **Impact**: Importance and value of completion
@@ -197,18 +217,23 @@ todoist-ai-ranker/
 ## Troubleshooting
 
 ### "TODOIST_API_TOKEN is not set"
+
 Make sure you've created a `.env` file and added your Todoist API token.
 
 ### "OPENAI_API_KEY is not set"
+
 Add your OpenAI API key to the `.env` file.
 
 ### Rate Limit Errors
+
 The script includes automatic rate limiting, but if you have many tasks, it may take a few minutes to process them all.
 
 ### API Timeout
+
 If you see timeout errors, check your internet connection. The script will automatically retry failed requests.
 
 ### JSON Parse Errors
+
 Occasionally the AI might return invalid JSON. The script will retry automatically. If it persists, try using `gpt-4` instead of `gpt-3.5-turbo`.
 
 ## Cost Estimates
@@ -220,6 +245,7 @@ Costs depend on the number of tasks and AI model:
 - **GPT-4-Turbo**: ~$0.01 per 20 tasks
 
 Running daily on 50 tasks costs approximately:
+
 - GPT-3.5-Turbo: ~$0.10/month
 - GPT-4: ~$2.70/month
 
@@ -228,6 +254,7 @@ Running daily on 50 tasks costs approximately:
 ### Daily Cron Job
 
 Add to your crontab to run daily at 9 AM:
+
 ```bash
 0 9 * * * cd /path/to/todoist-ai-ranker && /path/to/venv/bin/python -m src.main >> logs/cron.log 2>&1
 ```
@@ -235,6 +262,7 @@ Add to your crontab to run daily at 9 AM:
 ### Filter for Fresh Tasks Only
 
 Rank only today's and overdue tasks:
+
 ```bash
 0 9 * * * cd /path/to/todoist-ai-ranker && /path/to/venv/bin/python -m src.main --filter "today | overdue" >> logs/cron.log 2>&1
 ```
@@ -242,6 +270,7 @@ Rank only today's and overdue tasks:
 ## Contributing
 
 Contributions are welcome! Feel free to:
+
 - Report bugs
 - Suggest new features
 - Submit pull requests
@@ -259,6 +288,7 @@ MIT License - feel free to use and modify as needed.
 ## Support
 
 For issues or questions:
+
 1. Check the [Troubleshooting](#troubleshooting) section
 2. Review [Todoist API docs](https://developer.todoist.com/rest/v2/)
 3. Check [OpenAI API docs](https://platform.openai.com/docs/)
