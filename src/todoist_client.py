@@ -54,6 +54,7 @@ class RateLimiter:
                 )
                 time.sleep(sleep_time)
                 self.wait_if_needed()  # Recursive check
+                return
         
         self.calls.append(now)
 
