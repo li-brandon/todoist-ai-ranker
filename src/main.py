@@ -173,7 +173,34 @@ def main(
             if results['failed'] > 0:
                 print(f"   ❌ Failed to update: {results['failed']} task(s)")
         else:
-            print("   ℹ️  No updates needed.")
+            print("   ℹ️  No priority updates needed.")
+            
+        # Reorder tasks
+        print("\n🔄 Reordering tasks...")
+        
+        # Sort tasks by new priority (P1 first -> P4 last) and then by score (descending)
+        # We need to map tasks to their new rankings
+        task_map = {t.id: t for t in tasks}
+        ranked_tasks_list = []
+        
+        for ranking in rankings.rankings:
+            if ranking.task_id in task_map:
+                task = task_map[ranking.task_id]
+                ranked_tasks_list.append({
+                    'task': task,
+                    'priority': ranking.todoist_priority,
+                    'score': ranking.priority_score
+                })
+        
+        # Sort: Priority (descending: 4=P1, 1=P4), then Score (descending)
+        ranked_tasks_list.sort(key=lambda x: (x['priority'], x['score']), reverse=True)
+        
+        ordered_tasks = [item['task'] for item in ranked_tasks_list]
+        
+        if todoist_client.reorder_tasks(ordered_tasks):
+            print("   ✅ Tasks reordered successfully")
+        else:
+            print("   ❌ Failed to reorder tasks")
         
         print("\n✨ Done!\n")
         return 0

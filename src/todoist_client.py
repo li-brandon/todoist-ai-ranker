@@ -283,3 +283,70 @@ class TodoistClient:
         )
         
         return results
+
+    def reorder_tasks(
+        self,
+        ordered_tasks: List[TodoistTask],
+        dry_run: bool = False
+    ) -> bool:
+        """Reorder tasks in Todoist using the Sync API.
+        
+        Args:
+            ordered_tasks: List of tasks in the desired order
+            dry_run: If True, don't actually reorder tasks
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not ordered_tasks:
+            return True
+            
+        if dry_run:
+            self.logger.info(
+                "dry_run_reorder",
+                task_count=len(ordered_tasks),
+                first_task=ordered_tasks[0].content,
+                last_task=ordered_tasks[-1].content
+            )
+            return True
+            
+        try:
+            self.logger.info(
+                "reordering_tasks",
+                task_count=len(ordered_tasks)
+            )
+            
+            # The Sync API expects a list of task IDs in the desired order
+            # We need to construct a command for item_reorder
+            cmd = {
+                "type": "item_reorder",
+                "uuid": str(time.time()),  # Simple UUID generation
+                "args": {
+                    "items": [
+                        {"id": task.id, "child_order": idx}
+                        for idx, task in enumerate(ordered_tasks)
+                    ]
+                }
+            }
+            
+            response = self._api_call_with_retry(
+                lambda: requests.post(
+                    f"https://api.todoist.com/sync/v9/sync",
+                    headers=self.headers,
+                    json={"commands": [cmd]},
+                    timeout=self.settings.api_timeout
+                )
+            )
+            response.raise_for_status()
+            
+            result = response.json()
+            if result.get("sync_status", {}).get(cmd["uuid"]) == "ok":
+                self.logger.info("reorder_completed")
+                return True
+            else:
+                self.logger.error("reorder_failed_sync_status", result=result)
+                return False
+                
+        except Exception as e:
+            self.logger.error("reorder_failed", error=str(e))
+            return False

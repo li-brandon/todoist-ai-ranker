@@ -45,16 +45,20 @@ class AIRanker:
             task.to_ai_format() for task in tasks
         ])
         
-        prompt = f"""Rank the following tasks in priority order. Consider:
-- Urgency: How time-sensitive is the task?
-- Due date: Tasks due sooner should typically be higher priority
-- Impact: How important is completing this task?
-- Effort: Consider the effort required relative to the value
+        prompt = f"""Rank the following tasks using the Eisenhower Matrix method.
+        
+For each task, determine its Urgency and Importance to place it in one of the 4 quadrants:
+1. Do First (Urgent & Important) -> P1
+2. Schedule (Not Urgent & Important) -> P2
+3. Delegate (Urgent & Not Important) -> P3
+4. Don't Do (Not Urgent & Not Important) -> P4
+
+If a task lacks specific attributes (like due date or description), use your best judgment based on the task content to estimate its importance and urgency.
 
 For each task, provide:
 1. A priority score from 0-100 (100 = highest priority)
-2. A priority level: P1 (Urgent), P2 (High), P3 (Medium), or P4 (Normal)
-3. A brief reasoning for the priority assignment
+2. A priority level: P1, P2, P3, or P4 based on the matrix
+3. A brief reasoning explaining which quadrant it falls into and why
 
 Return the result as a JSON object with this exact structure:
 {{
@@ -63,7 +67,7 @@ Return the result as a JSON object with this exact structure:
       "task_id": "task ID from the input",
       "priority_score": 85,
       "priority_level": "P1",
-      "reasoning": "Brief explanation"
+      "reasoning": "Urgent and Important: [Explanation]"
     }}
   ]
 }}
