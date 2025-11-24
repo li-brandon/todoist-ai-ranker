@@ -90,7 +90,6 @@ python -m src.main
 
 See what changes would be made without updating:
 
-See what changes would be made without updating:
 
 ```bash
 ./run.sh --dry-run
