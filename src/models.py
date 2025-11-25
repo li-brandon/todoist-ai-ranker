@@ -38,6 +38,11 @@ class TodoistTask(BaseModel):
         }
         return priority_map.get(self.priority, "Unknown")
     
+    @property
+    def is_recurring(self) -> bool:
+        """Check if task is a recurring task."""
+        return self.due is not None and self.due.is_recurring
+    
     def to_ai_format(self) -> str:
         """Format task for AI prompt."""
         parts = [f"- {self.content}"]

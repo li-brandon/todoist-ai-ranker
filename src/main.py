@@ -126,12 +126,22 @@ def print_today_organization_summary(
     print("  Today View Organization" + (" (DRY RUN)" if dry_run else ""))
     print("=" * 60 + "\n")
     
+    # Count recurring tasks
+    recurring_to_add = [t for t in tasks_to_add if t.is_recurring]
+    recurring_to_remove = [t for t in tasks_to_remove if t.is_recurring]
+    non_recurring_to_add = [t for t in tasks_to_add if not t.is_recurring]
+    non_recurring_to_remove = [t for t in tasks_to_remove if not t.is_recurring]
+    
     print(f"📊 Summary:")
     print(f"   Total tasks analyzed: {len(all_tasks)}")
     print(f"   Current tasks in Today: {len(current_today_tasks)}")
     print(f"   New Today view size: {len(selected_tasks)} (limit: {limit})")
-    print(f"   Tasks to add to Today: {len(tasks_to_add)}")
-    print(f"   Tasks to remove from Today: {len(tasks_to_remove)}")
+    print(f"   Tasks to add to Today: {len(non_recurring_to_add)} (non-recurring)")
+    if recurring_to_add:
+        print(f"   Recurring tasks to add: {len(recurring_to_add)} (will keep their schedule)")
+    print(f"   Tasks to remove from Today: {len(non_recurring_to_remove)} (non-recurring)")
+    if recurring_to_remove:
+        print(f"   Recurring tasks to remove: {len(recurring_to_remove)} (will keep their schedule)")
     print()
     
     # Calculate priority distribution of selected tasks
@@ -169,7 +179,8 @@ def print_today_organization_summary(
         
         for task, ranking in tasks_with_rankings:
             due_info = f" (due: {task.due.string or task.due.date})" if task.due else " (no due date)"
-            print(f"➕ {task.content[:45]}...{due_info}")
+            recurring_note = " [RECURRING - will keep schedule]" if task.is_recurring else ""
+            print(f"➕ {task.content[:45]}...{due_info}{recurring_note}")
             print(f"   {ranking.priority_level} (score: {ranking.priority_score})")
             print()
     
@@ -204,10 +215,11 @@ def print_today_organization_summary(
         
         for task in tasks_to_remove[:10]:
             ranking = rankings.get_ranking_for_task(task.id)
+            recurring_note = " [RECURRING - will keep schedule]" if task.is_recurring else ""
             if ranking:
-                print(f"➖ {task.content[:50]}... ({ranking.priority_level}, score: {ranking.priority_score})")
+                print(f"➖ {task.content[:50]}... ({ranking.priority_level}, score: {ranking.priority_score}){recurring_note}")
             else:
-                print(f"➖ {task.content[:50]}...")
+                print(f"➖ {task.content[:50]}...{recurring_note}")
         
         if len(tasks_to_remove) > 10:
             print(f"   ... and {len(tasks_to_remove) - 10} more task(s)")
@@ -351,26 +363,52 @@ def organize_today_view(
             return 0
         
         # Step 6: Update due dates - Add tasks to Today
+        # Skip recurring tasks as they manage their own schedule
         if tasks_to_add:
             logger.info("adding_tasks_to_today")
             print("\n📥 Adding tasks to Today...")
             
-            add_updates = [(task.id, "today") for task in tasks_to_add]
-            results = todoist_client.batch_update_due_dates(add_updates)
-            print(f"   ✅ Added to Today: {results['successful']} task(s)")
-            if results['failed'] > 0:
-                print(f"   ❌ Failed to add: {results['failed']} task(s)")
+            # Filter out recurring tasks
+            non_recurring_to_add = [task for task in tasks_to_add if not task.is_recurring]
+            recurring_to_add = [task for task in tasks_to_add if task.is_recurring]
+            
+            if recurring_to_add:
+                print(f"   ⏭️  Skipped {len(recurring_to_add)} recurring task(s) (recurring tasks keep their schedule)")
+                for task in recurring_to_add:
+                    print(f"      • {task.content[:50]}...")
+            
+            if non_recurring_to_add:
+                add_updates = [(task.id, "today") for task in non_recurring_to_add]
+                results = todoist_client.batch_update_due_dates(add_updates)
+                print(f"   ✅ Added to Today: {results['successful']} task(s)")
+                if results['failed'] > 0:
+                    print(f"   ❌ Failed to add: {results['failed']} task(s)")
+            elif recurring_to_add:
+                print("   ℹ️  No non-recurring tasks to add.")
         
         # Step 7: Update due dates - Remove tasks from Today (reschedule to tomorrow)
+        # Skip recurring tasks as they manage their own schedule
         if tasks_to_remove:
             logger.info("removing_tasks_from_today")
             print("\n📤 Removing tasks from Today (→ tomorrow)...")
             
-            remove_updates = [(task.id, "tomorrow") for task in tasks_to_remove]
-            results = todoist_client.batch_update_due_dates(remove_updates)
-            print(f"   ✅ Moved to tomorrow: {results['successful']} task(s)")
-            if results['failed'] > 0:
-                print(f"   ❌ Failed to move: {results['failed']} task(s)")
+            # Filter out recurring tasks
+            non_recurring_to_remove = [task for task in tasks_to_remove if not task.is_recurring]
+            recurring_to_remove = [task for task in tasks_to_remove if task.is_recurring]
+            
+            if recurring_to_remove:
+                print(f"   ⏭️  Skipped {len(recurring_to_remove)} recurring task(s) (recurring tasks keep their schedule)")
+                for task in recurring_to_remove:
+                    print(f"      • {task.content[:50]}...")
+            
+            if non_recurring_to_remove:
+                remove_updates = [(task.id, "tomorrow") for task in non_recurring_to_remove]
+                results = todoist_client.batch_update_due_dates(remove_updates)
+                print(f"   ✅ Moved to tomorrow: {results['successful']} task(s)")
+                if results['failed'] > 0:
+                    print(f"   ❌ Failed to move: {results['failed']} task(s)")
+            elif recurring_to_remove:
+                print("   ℹ️  No non-recurring tasks to move.")
         
         # Step 8: Update priorities for selected tasks (if needed)
         logger.info("updating_selected_task_priorities")
