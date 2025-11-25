@@ -185,7 +185,7 @@ The organize-inbox feature will:
 ============================================================
 
 📥 Finding Inbox...
-   Found Inbox (ID: 123456789)
+   Found Inbox (ID: <inbox_project_id>)   # Detected automatically
 
 📋 Fetching tasks from Inbox...
    Found 8 task(s) in Inbox
