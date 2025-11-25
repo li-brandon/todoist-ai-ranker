@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     retry_max_wait: int = 10  # seconds
     
     # Today View Organization
-    today_view_limit: int = 15  # Maximum number of tasks in organized Today view
+    today_view_limit: int = 5  # Maximum number of tasks in organized Today view
     
     model_config = SettingsConfigDict(
         env_file=".env",

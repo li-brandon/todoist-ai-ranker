@@ -7,7 +7,7 @@ Automatically prioritize your Todoist tasks using AI. This Python script fetches
 - 🤖 **AI-Powered Ranking**: Uses OpenAI GPT models to intelligently prioritize tasks
 - 🎯 **Smart Analysis**: Considers urgency, due dates, impact, and effort
 - 🔄 **Automatic Updates**: Directly updates task priorities in Todoist
-- 📅 **Today View Organization**: Organize your Today view with optimal task distribution (priority-first selection)
+- 📅 **Today View Organization**: Automatically populate your Today view with the most important tasks from your entire task list
 - 🔒 **Safe**: Dry-run mode to preview changes before applying
 - 🎨 **Flexible Filtering**: Filter by project, label, or custom queries
 - ⚡ **Rate Limited**: Respects API rate limits with automatic throttling
@@ -68,7 +68,7 @@ OPENAI_API_KEY=your_openai_key_here
 AI_MODEL=gpt-3.5-turbo              # or gpt-4, gpt-4-turbo-preview
 AI_TEMPERATURE=0.7                   # 0.0-1.0, lower = more deterministic
 LOG_LEVEL=INFO                       # DEBUG, INFO, WARNING, ERROR
-TODAY_VIEW_LIMIT=15                  # Maximum tasks in organized Today view (default: 15)
+TODAY_VIEW_LIMIT=5                   # Maximum tasks in organized Today view (default: 5)
 ```
 
 ### AI Model Selection
@@ -136,7 +136,7 @@ python -m src.main --verbose
 
 ### Organize Today View
 
-Organize your Today view by selecting the optimal number of tasks distributed across priorities. The feature uses a priority-first approach: all P1 tasks are selected first, then P2, P3, and P4 until the limit is reached.
+Automatically populate your Today view with the most important tasks from your entire Todoist. The feature analyzes ALL your tasks using AI and selects the top N most important ones to focus on today.
 
 **Basic usage:**
 
@@ -159,17 +159,19 @@ python -m src.main --organize-today --dry-run
 **With additional filters:**
 
 ```bash
-python -m src.main --organize-today --label "work" --today-limit 12
+python -m src.main --organize-today --label "work" --today-limit 8
 ```
 
 The organize-today feature will:
 
-1. Fetch all tasks from your Today view
-2. Rank them using AI
-3. Select the top N tasks (default: 15) using priority-first selection
-4. Update priorities for selected tasks (if needed)
-5. Reorder tasks so selected ones appear first in Today view
-6. Excluded tasks remain in Today view but are not part of the organized set
+1. Fetch ALL tasks from your Todoist (not just Today view)
+2. Rank all tasks using AI based on importance and urgency
+3. Select the top N tasks (default: 5) using priority-first selection
+4. **Add** selected tasks to Today view (sets due date to today)
+5. **Remove** tasks currently in Today that didn't make the cut (reschedules to tomorrow)
+6. Update priorities and reorder tasks in your Today view
+
+This ensures your Today view always contains only the most important tasks you should focus on.
 
 ## How It Works
 
@@ -250,60 +252,79 @@ Do you want to update these priorities in Todoist? (y/N): y
   Automatically prioritize your tasks using AI
 ============================================================
 
-📥 Fetching tasks from Today view...
-   Found 25 task(s) in Today view
+📥 Fetching all tasks from Todoist...
+   Found 47 total task(s)
 
-🤖 Ranking tasks with AI...
-   Ranked 25 task(s)
+📅 Fetching current Today view...
+   Found 8 task(s) currently in Today
+
+🤖 Ranking all tasks with AI...
+   Ranked 47 task(s)
 
 ============================================================
   Today View Organization
 ============================================================
 
 📊 Summary:
-   Total tasks in Today view: 25
-   Tasks selected for organization: 15 (limit: 15)
-   Tasks excluded: 10
+   Total tasks analyzed: 47
+   Current tasks in Today: 8
+   New Today view size: 5 (limit: 5)
+   Tasks to add to Today: 3
+   Tasks to remove from Today: 6
 
-📈 Priority Distribution (Selected Tasks):
-   P1: 5 task(s) (33.3%)
-   P2: 6 task(s) (40.0%)
-   P3: 3 task(s) (20.0%)
-   P4: 1 task(s) (6.7%)
-
-------------------------------------------------------------
-  Selected Tasks (Will be organized)
-------------------------------------------------------------
-
-✅ Finish quarterly report...
-   P3 → P1 (score: 95)
-
-✅ Review team proposals...
-   P2 (score: 88) - No change needed
-
-✅ Schedule team meeting...
-   P4 → P2 (score: 75)
+📈 Priority Distribution (New Today View):
+   P1: 2 task(s) (40.0%)
+   P2: 2 task(s) (40.0%)
+   P3: 1 task(s) (20.0%)
 
 ------------------------------------------------------------
-  Excluded Tasks (Remain in Today view but not organized)
+  📥 Tasks to ADD to Today
 ------------------------------------------------------------
 
-⏭️  Update documentation... (P3, score: 45)
-⏭️  Organize desk... (P4, score: 20)
-   ... and 8 more task(s)
+➕ Finish quarterly report... (due: next week)
+   P1 (score: 95)
+
+➕ Prepare client presentation... (no due date)
+   P1 (score: 92)
+
+➕ Review contract terms... (due: Friday)
+   P2 (score: 85)
+
+------------------------------------------------------------
+  ✅ Tasks STAYING in Today
+------------------------------------------------------------
+
+✅ Submit expense report...
+   P2 (score: 80)
+
+✅ Team standup meeting...
+   P3 (score: 70)
+
+------------------------------------------------------------
+  📤 Tasks to REMOVE from Today (→ tomorrow)
+------------------------------------------------------------
+
+➖ Update documentation... (P3, score: 45)
+➖ Organize desk... (P4, score: 20)
+   ... and 4 more task(s)
 
 ============================================================
 
 Do you want to organize your Today view with these tasks? (y/N): y
 
-📤 Updating task priorities...
-   ✅ Successfully updated: 8 task(s)
+📥 Adding tasks to Today...
+   ✅ Added to Today: 3 task(s)
 
-🔄 Reordering tasks...
+📤 Removing tasks from Today (→ tomorrow)...
+   ✅ Moved to tomorrow: 6 task(s)
+
+🎯 Updating task priorities...
+   ✅ Updated priorities: 2 task(s)
+
+🔄 Reordering Today view...
    ✅ Tasks reordered successfully
-   📋 Selected 15 task(s) appear first in Today view
 
-✨ Done!
+✨ Done! Your Today view now has 5 optimized task(s).
 ```
 
 ## Project Structure
@@ -388,7 +409,7 @@ Automatically organize your Today view each morning:
 With a custom limit:
 
 ```bash
-0 9 * * * cd /path/to/todoist-ai-ranker && /path/to/venv/bin/python -m src.main --organize-today --today-limit 10 >> logs/cron.log 2>&1
+0 9 * * * cd /path/to/todoist-ai-ranker && /path/to/venv/bin/python -m src.main --organize-today --today-limit 7 >> logs/cron.log 2>&1
 ```
 
 ## Contributing

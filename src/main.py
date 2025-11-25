@@ -36,10 +36,76 @@ def print_banner():
     print("=" * 60 + "\n")
 
 
+def print_missing_tasks(
+    tasks: list[TodoistTask],
+    rankings: PriorityRankings,
+    show_all: bool = False
+) -> None:
+    """Print tasks that didn't receive rankings.
+    
+    Args:
+        tasks: All tasks that were sent for ranking
+        rankings: Rankings returned from AI
+        show_all: If True, show all missing tasks. If False, show first 20.
+    """
+    ranked_ids = {r.task_id for r in rankings.rankings}
+    task_ids = {t.id for t in tasks}
+    missing_task_ids = task_ids - ranked_ids
+    
+    if missing_task_ids:
+        print("\n" + "!" * 60)
+        print("  ⚠️  Ranking Mismatch Detected")
+        print("!" * 60 + "\n")
+        
+        print(f"❌ {len(missing_task_ids)} task(s) did not receive rankings")
+        print(f"   ({len(ranked_ids)} ranked / {len(task_ids)} total)\n")
+        
+        # Sort missing tasks by ID for consistent display
+        missing_tasks = sorted(
+            [t for t in tasks if t.id in missing_task_ids],
+            key=lambda t: t.id
+        )
+        
+        # Show tasks (limit to first 20 unless show_all is True)
+        display_count = len(missing_tasks) if show_all else min(20, len(missing_tasks))
+        
+        print("Missing task details:\n")
+        for task in missing_tasks[:display_count]:
+            due_info = f" (due: {task.due.string or task.due.date})" if task.due else " (no due date)"
+            labels_info = f" [Labels: {', '.join(task.labels)}]" if task.labels else ""
+            priority_info = f" [Priority: {task.priority_label}]"
+            print(f"   • ID: {task.id}")
+            print(f"     Content: {task.content[:70]}")
+            print(f"     {due_info}{labels_info}{priority_info}")
+            print()
+        
+        if len(missing_tasks) > display_count:
+            print(f"   ... and {len(missing_tasks) - display_count} more task(s)\n")
+        
+        print("   Possible reasons:")
+        print("   - Batch processing failed (JSON parse error, API timeout, etc.)")
+        print("   - AI response validation failed")
+        print("   - Network/API errors during batch processing")
+        print()
+        print("   Recommendation:")
+        print("   - Run the command again (may succeed on retry)")
+        print("   - If persistent, try using gpt-4 model for better reliability")
+        print("   - Check logs for specific batch error messages")
+        print()
+        
+        # Show task IDs in a format that can be easily copied
+        print("   Missing Task IDs:")
+        print("   " + ", ".join([f"'{tid}'" for tid in sorted(missing_task_ids)]))
+        print()
+        print("!" * 60 + "\n")
+
+
 def print_today_organization_summary(
     all_tasks: list[TodoistTask],
     selected_tasks: list[TodoistTask],
-    excluded_tasks: list[TodoistTask],
+    tasks_to_add: list[TodoistTask],
+    tasks_to_remove: list[TodoistTask],
+    current_today_tasks: list[TodoistTask],
     rankings: PriorityRankings,
     limit: int,
     dry_run: bool = False
@@ -47,9 +113,11 @@ def print_today_organization_summary(
     """Print summary of Today view organization.
     
     Args:
-        all_tasks: All tasks in Today view
-        selected_tasks: Tasks selected for organization
-        excluded_tasks: Tasks excluded from organization
+        all_tasks: All tasks in Todoist
+        selected_tasks: Tasks selected for Today view
+        tasks_to_add: Tasks being added to Today view
+        tasks_to_remove: Tasks being removed from Today view
+        current_today_tasks: Tasks currently in Today view
         rankings: AI-determined rankings
         limit: Maximum number of tasks in organized view
         dry_run: Whether this is a dry run
@@ -59,9 +127,11 @@ def print_today_organization_summary(
     print("=" * 60 + "\n")
     
     print(f"📊 Summary:")
-    print(f"   Total tasks in Today view: {len(all_tasks)}")
-    print(f"   Tasks selected for organization: {len(selected_tasks)} (limit: {limit})")
-    print(f"   Tasks excluded: {len(excluded_tasks)}")
+    print(f"   Total tasks analyzed: {len(all_tasks)}")
+    print(f"   Current tasks in Today: {len(current_today_tasks)}")
+    print(f"   New Today view size: {len(selected_tasks)} (limit: {limit})")
+    print(f"   Tasks to add to Today: {len(tasks_to_add)}")
+    print(f"   Tasks to remove from Today: {len(tasks_to_remove)}")
     print()
     
     # Calculate priority distribution of selected tasks
@@ -71,60 +141,76 @@ def print_today_organization_summary(
         if ranking:
             priority_counts[ranking.priority_level] += 1
     
-    print("📈 Priority Distribution (Selected Tasks):")
-    for level in ['P1', 'P2', 'P3', 'P4']:
-        count = priority_counts[level]
-        if count > 0:
-            percentage = (count / len(selected_tasks)) * 100 if selected_tasks else 0
-            print(f"   {level}: {count} task(s) ({percentage:.1f}%)")
-    print()
-    
-    # Show selected tasks
     if selected_tasks:
+        print("📈 Priority Distribution (New Today View):")
+        for level in ['P1', 'P2', 'P3', 'P4']:
+            count = priority_counts[level]
+            if count > 0:
+                percentage = (count / len(selected_tasks)) * 100
+                print(f"   {level}: {count} task(s) ({percentage:.1f}%)")
+        print()
+    
+    # Show tasks being added to Today
+    if tasks_to_add:
         print("-" * 60)
-        print("  Selected Tasks (Will be organized)")
+        print("  📥 Tasks to ADD to Today")
         print("-" * 60 + "\n")
         
-        # Sort selected tasks by priority and score
-        selected_with_rankings = []
-        for task in selected_tasks:
+        tasks_with_rankings = []
+        for task in tasks_to_add:
             ranking = rankings.get_ranking_for_task(task.id)
             if ranking:
-                selected_with_rankings.append((task, ranking))
+                tasks_with_rankings.append((task, ranking))
         
-        selected_with_rankings.sort(
+        tasks_with_rankings.sort(
             key=lambda x: (x[1].todoist_priority, x[1].priority_score),
             reverse=True
         )
         
-        for task, ranking in selected_with_rankings:
-            priority_labels = {4: "P1", 3: "P2", 2: "P3", 1: "P4"}
-            old_label = priority_labels.get(task.priority, "?")
-            new_label = ranking.priority_level
-            
-            if task.priority != ranking.todoist_priority:
-                print(f"✅ {task.content[:50]}...")
-                print(f"   {old_label} → {new_label} (score: {ranking.priority_score})")
-            else:
-                print(f"✅ {task.content[:50]}...")
-                print(f"   {new_label} (score: {ranking.priority_score}) - No change needed")
+        for task, ranking in tasks_with_rankings:
+            due_info = f" (due: {task.due.string or task.due.date})" if task.due else " (no due date)"
+            print(f"➕ {task.content[:45]}...{due_info}")
+            print(f"   {ranking.priority_level} (score: {ranking.priority_score})")
             print()
     
-    # Show excluded tasks
-    if excluded_tasks:
+    # Show tasks staying in Today
+    staying_in_today = [t for t in selected_tasks if t.id not in {task.id for task in tasks_to_add}]
+    if staying_in_today:
         print("-" * 60)
-        print("  Excluded Tasks (Remain in Today view but not organized)")
+        print("  ✅ Tasks STAYING in Today")
         print("-" * 60 + "\n")
         
-        for task in excluded_tasks[:10]:  # Show first 10 excluded tasks
+        tasks_with_rankings = []
+        for task in staying_in_today:
             ranking = rankings.get_ranking_for_task(task.id)
             if ranking:
-                print(f"⏭️  {task.content[:50]}... ({ranking.priority_level}, score: {ranking.priority_score})")
-            else:
-                print(f"⏭️  {task.content[:50]}...")
+                tasks_with_rankings.append((task, ranking))
         
-        if len(excluded_tasks) > 10:
-            print(f"   ... and {len(excluded_tasks) - 10} more task(s)")
+        tasks_with_rankings.sort(
+            key=lambda x: (x[1].todoist_priority, x[1].priority_score),
+            reverse=True
+        )
+        
+        for task, ranking in tasks_with_rankings:
+            print(f"✅ {task.content[:50]}...")
+            print(f"   {ranking.priority_level} (score: {ranking.priority_score})")
+            print()
+    
+    # Show tasks being removed from Today
+    if tasks_to_remove:
+        print("-" * 60)
+        print("  📤 Tasks to REMOVE from Today (→ tomorrow)")
+        print("-" * 60 + "\n")
+        
+        for task in tasks_to_remove[:10]:
+            ranking = rankings.get_ranking_for_task(task.id)
+            if ranking:
+                print(f"➖ {task.content[:50]}... ({ranking.priority_level}, score: {ranking.priority_score})")
+            else:
+                print(f"➖ {task.content[:50]}...")
+        
+        if len(tasks_to_remove) > 10:
+            print(f"   ... and {len(tasks_to_remove) - 10} more task(s)")
         print()
     
     print("=" * 60 + "\n")
@@ -140,13 +226,20 @@ def organize_today_view(
     label: Optional[str] = None,
     verbose: bool = False
 ) -> int:
-    """Organize Today view with optimal task distribution.
+    """Organize Today view by selecting the most important tasks from all tasks.
+    
+    This function:
+    1. Fetches ALL tasks from Todoist
+    2. Ranks them using AI
+    3. Selects the top N most important tasks
+    4. Schedules selected tasks for Today
+    5. Removes tasks currently in Today that didn't make the cut (reschedules to tomorrow)
     
     Args:
         todoist_client: Todoist API client
         ai_ranker: AI ranker instance
         settings: Application settings
-        limit: Maximum number of tasks to include in organized view
+        limit: Maximum number of tasks to include in Today view
         dry_run: If True, don't actually update tasks
         project_id: Optional project ID to filter tasks
         label: Optional label to filter tasks
@@ -156,44 +249,48 @@ def organize_today_view(
         Exit code (0 for success, 1 for failure)
     """
     try:
-        # Fetch tasks filtered to Today view
-        logger.info("fetching_today_tasks")
-        print("📥 Fetching tasks from Today view...")
+        # Step 1: Fetch ALL tasks from Todoist
+        logger.info("fetching_all_tasks")
+        print("📥 Fetching all tasks from Todoist...")
         
-        # Build filter query - combine "today" with any additional filters
-        filter_parts = ["today"]
-        if project_id:
-            # Note: project_id is handled separately, but we can add it to filter if needed
-            pass
-        if label:
-            filter_parts.append(f"@{label}")
-        
-        filter_query = " & ".join(filter_parts) if len(filter_parts) > 1 else "today"
-        
-        tasks = todoist_client.get_tasks(
+        all_tasks = todoist_client.get_tasks(
             project_id=project_id,
             label=label,
-            filter_query=filter_query
+            filter_query=None  # No filter - get ALL tasks
         )
         
-        if not tasks:
-            print("✅ No tasks found in Today view!")
+        if not all_tasks:
+            print("✅ No tasks found!")
             return 0
         
-        print(f"   Found {len(tasks)} task(s) in Today view\n")
+        print(f"   Found {len(all_tasks)} total task(s)\n")
         
-        # Rank all Today tasks with AI
-        logger.info("ranking_today_tasks")
-        print("🤖 Ranking tasks with AI...")
-        rankings, summary = ai_ranker.rank_tasks_with_summary(tasks)
+        # Step 2: Fetch current Today view tasks (to know what to remove)
+        logger.info("fetching_current_today_tasks")
+        print("📅 Fetching current Today view...")
+        
+        current_today_tasks = todoist_client.get_today_tasks()
+        current_today_ids = {t.id for t in current_today_tasks}
+        
+        print(f"   Found {len(current_today_tasks)} task(s) currently in Today\n")
+        
+        # Step 3: Rank ALL tasks with AI
+        logger.info("ranking_all_tasks")
+        print("🤖 Ranking all tasks with AI...")
+        rankings, summary = ai_ranker.rank_tasks_with_summary(all_tasks)
         
         print(f"   Ranked {summary['ranked_tasks']} task(s)")
+        
+        # Check for and display missing tasks
+        if summary['ranked_tasks'] < summary['total_tasks']:
+            print_missing_tasks(all_tasks, rankings)
+        
         print()
         
-        # Select top N tasks using priority-first approach
+        # Step 4: Select top N tasks using priority-first approach
         # Group tasks by priority level
         tasks_by_priority = {'P1': [], 'P2': [], 'P3': [], 'P4': []}
-        task_map = {t.id: t for t in tasks}
+        task_map = {t.id: t for t in all_tasks}
         
         for ranking in rankings.rankings:
             if ranking.task_id in task_map:
@@ -221,14 +318,20 @@ def organize_today_view(
                 selected_tasks.append(task)
                 selected_task_ids.add(task.id)
         
-        # Determine excluded tasks
-        excluded_tasks = [t for t in tasks if t.id not in selected_task_ids]
+        # Step 5: Determine tasks to add and remove
+        # Tasks to add: selected tasks that are NOT currently in Today
+        tasks_to_add = [t for t in selected_tasks if t.id not in current_today_ids]
+        
+        # Tasks to remove: tasks currently in Today that are NOT selected
+        tasks_to_remove = [t for t in current_today_tasks if t.id not in selected_task_ids]
         
         # Display summary
         print_today_organization_summary(
-            all_tasks=tasks,
+            all_tasks=all_tasks,
             selected_tasks=selected_tasks,
-            excluded_tasks=excluded_tasks,
+            tasks_to_add=tasks_to_add,
+            tasks_to_remove=tasks_to_remove,
+            current_today_tasks=current_today_tasks,
             rankings=rankings,
             limit=limit,
             dry_run=dry_run
@@ -247,81 +350,76 @@ def organize_today_view(
             print("\n❌ Organization cancelled.\n")
             return 0
         
-        # Update priorities for selected tasks (if needed)
-        logger.info("updating_selected_task_priorities")
-        print("\n📤 Updating task priorities...")
+        # Step 6: Update due dates - Add tasks to Today
+        if tasks_to_add:
+            logger.info("adding_tasks_to_today")
+            print("\n📥 Adding tasks to Today...")
+            
+            add_updates = [(task.id, "today") for task in tasks_to_add]
+            results = todoist_client.batch_update_due_dates(add_updates)
+            print(f"   ✅ Added to Today: {results['successful']} task(s)")
+            if results['failed'] > 0:
+                print(f"   ❌ Failed to add: {results['failed']} task(s)")
         
-        updates = []
+        # Step 7: Update due dates - Remove tasks from Today (reschedule to tomorrow)
+        if tasks_to_remove:
+            logger.info("removing_tasks_from_today")
+            print("\n📤 Removing tasks from Today (→ tomorrow)...")
+            
+            remove_updates = [(task.id, "tomorrow") for task in tasks_to_remove]
+            results = todoist_client.batch_update_due_dates(remove_updates)
+            print(f"   ✅ Moved to tomorrow: {results['successful']} task(s)")
+            if results['failed'] > 0:
+                print(f"   ❌ Failed to move: {results['failed']} task(s)")
+        
+        # Step 8: Update priorities for selected tasks (if needed)
+        logger.info("updating_selected_task_priorities")
+        print("\n🎯 Updating task priorities...")
+        
+        priority_updates = []
         for task in selected_tasks:
             ranking = rankings.get_ranking_for_task(task.id)
             if ranking and task.priority != ranking.todoist_priority:
-                updates.append((task.id, ranking.todoist_priority))
+                priority_updates.append((task.id, ranking.todoist_priority))
         
-        if updates:
-            results = todoist_client.batch_update_priorities(updates)
-            print(f"   ✅ Successfully updated: {results['successful']} task(s)")
+        if priority_updates:
+            results = todoist_client.batch_update_priorities(priority_updates)
+            print(f"   ✅ Updated priorities: {results['successful']} task(s)")
             if results['failed'] > 0:
                 print(f"   ❌ Failed to update: {results['failed']} task(s)")
         else:
             print("   ℹ️  No priority updates needed.")
         
-        # Reorder tasks so selected ones appear first
-        print("\n🔄 Reordering tasks...")
+        # Step 9: Reorder tasks in Today view
+        print("\n🔄 Reordering Today view...")
         
-        # Build ordered list: selected tasks first (by priority and score), then excluded tasks
+        # Build ordered list by priority and score
         ordered_tasks_list = []
+        for task in selected_tasks:
+            ranking = rankings.get_ranking_for_task(task.id)
+            if ranking:
+                ordered_tasks_list.append({
+                    'task': task,
+                    'priority': ranking.todoist_priority,
+                    'score': ranking.priority_score
+                })
         
-        # Add selected tasks in priority order
-        for priority_level in ['P1', 'P2', 'P3', 'P4']:
-            for task, ranking in tasks_by_priority[priority_level]:
-                if task.id in selected_task_ids:
-                    ordered_tasks_list.append({
-                        'task': task,
-                        'priority': ranking.todoist_priority,
-                        'score': ranking.priority_score
-                    })
-        
-        # Sort selected tasks by priority and score
+        # Sort by priority (P1 first) and score (descending)
         ordered_tasks_list.sort(
             key=lambda x: (x['priority'], x['score']),
             reverse=True
         )
         
-        # Add excluded tasks (keep their current order or sort by their rankings)
-        excluded_with_rankings = []
-        for task in excluded_tasks:
-            ranking = rankings.get_ranking_for_task(task.id)
-            if ranking:
-                excluded_with_rankings.append({
-                    'task': task,
-                    'priority': ranking.todoist_priority,
-                    'score': ranking.priority_score
-                })
-            else:
-                excluded_with_rankings.append({
-                    'task': task,
-                    'priority': task.priority,
-                    'score': 0
-                })
+        final_ordered_tasks = [item['task'] for item in ordered_tasks_list]
         
-        excluded_with_rankings.sort(
-            key=lambda x: (x['priority'], x['score']),
-            reverse=True
-        )
-        
-        # Combine: selected first, then excluded
-        final_ordered_tasks = (
-            [item['task'] for item in ordered_tasks_list] +
-            [item['task'] for item in excluded_with_rankings]
-        )
-        
-        if todoist_client.reorder_tasks(final_ordered_tasks):
+        if final_ordered_tasks and todoist_client.reorder_tasks(final_ordered_tasks):
             print("   ✅ Tasks reordered successfully")
-            print(f"   📋 Selected {len(selected_tasks)} task(s) appear first in Today view")
+        elif not final_ordered_tasks:
+            print("   ℹ️  No tasks to reorder.")
         else:
             print("   ❌ Failed to reorder tasks")
         
-        print("\n✨ Done!\n")
+        print(f"\n✨ Done! Your Today view now has {len(selected_tasks)} optimized task(s).\n")
         return 0
         
     except KeyboardInterrupt:
@@ -450,6 +548,11 @@ def main(
         rankings, summary = ai_ranker.rank_tasks_with_summary(tasks)
         
         print(f"   Ranked {summary['ranked_tasks']} task(s)")
+        
+        # Check for and display missing tasks
+        if summary['ranked_tasks'] < summary['total_tasks']:
+            print_missing_tasks(tasks, rankings)
+        
         print(f"   Priority distribution:")
         for level in ['P1', 'P2', 'P3', 'P4']:
             count = summary['priority_distribution'][level]

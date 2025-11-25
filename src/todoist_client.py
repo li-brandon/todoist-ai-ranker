@@ -285,6 +285,114 @@ class TodoistClient:
         
         return results
 
+    def get_today_tasks(self) -> List[TodoistTask]:
+        """Fetch tasks that are due today.
+        
+        Returns:
+            List of TodoistTask objects due today
+        """
+        return self.get_tasks(filter_query="today")
+    
+    def update_task_due_date(
+        self,
+        task_id: str,
+        due_string: Optional[str] = None,
+        dry_run: bool = False
+    ) -> bool:
+        """Update task due date in Todoist.
+        
+        Args:
+            task_id: ID of the task to update
+            due_string: Due date string (e.g., "today", "tomorrow", None to remove)
+            dry_run: If True, don't actually update the task
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if dry_run:
+            self.logger.info(
+                "dry_run_due_date_update",
+                task_id=task_id,
+                due_string=due_string
+            )
+            return True
+        
+        try:
+            self.logger.info(
+                "updating_task_due_date",
+                task_id=task_id,
+                due_string=due_string
+            )
+            
+            # Build the update payload
+            payload = {}
+            if due_string:
+                payload["due_string"] = due_string
+            else:
+                # To remove due date, we need to set due_date to None
+                payload["due_string"] = "no date"
+            
+            response = self._api_call_with_retry(
+                lambda: requests.post(
+                    f"{self.BASE_URL}/tasks/{task_id}",
+                    headers=self.headers,
+                    json=payload,
+                    timeout=self.settings.api_timeout
+                )
+            )
+            response.raise_for_status()
+            
+            self.logger.info("task_due_date_updated", task_id=task_id)
+            return True
+            
+        except Exception as e:
+            self.logger.error(
+                "update_task_due_date_failed",
+                task_id=task_id,
+                error=str(e)
+            )
+            return False
+    
+    def batch_update_due_dates(
+        self,
+        updates: List[tuple[str, Optional[str]]],
+        dry_run: bool = False
+    ) -> dict:
+        """Update multiple task due dates.
+        
+        Args:
+            updates: List of (task_id, due_string) tuples
+            dry_run: If True, don't actually update tasks
+            
+        Returns:
+            Dict with 'successful' and 'failed' counts
+        """
+        results = {'successful': 0, 'failed': 0}
+        
+        self.logger.info(
+            "batch_due_date_update_started",
+            total_tasks=len(updates),
+            dry_run=dry_run
+        )
+        
+        for task_id, due_string in updates:
+            if self.update_task_due_date(task_id, due_string, dry_run):
+                results['successful'] += 1
+            else:
+                results['failed'] += 1
+            
+            # Small delay between updates to be respectful
+            if not dry_run:
+                time.sleep(0.1)
+        
+        self.logger.info(
+            "batch_due_date_update_completed",
+            successful=results['successful'],
+            failed=results['failed']
+        )
+        
+        return results
+
     def reorder_tasks(
         self,
         ordered_tasks: List[TodoistTask],
