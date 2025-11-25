@@ -167,7 +167,12 @@ Tasks:
                     try:
                         response_data = json.loads(response_content)
                     except json.JSONDecodeError as e:
-                        self.logger.error("json_parse_failed", error=str(e), content=response_content)
+                        self.logger.error(
+                            "json_parse_failed", 
+                            error=str(e), 
+                            batch_index=i // batch_size + 1,
+                            batch_task_ids=[t.id for t in batch]
+                        )
                         continue  # Skip failed batch but try others
                     
                     # Validate with Pydantic
@@ -175,11 +180,22 @@ Tasks:
                         batch_rankings = PriorityRankings(**response_data)
                         all_rankings.extend(batch_rankings.rankings)
                     except Exception as e:
-                        self.logger.error("validation_failed", error=str(e), data=response_data)
+                        self.logger.error(
+                            "validation_failed", 
+                            error=str(e), 
+                            batch_index=i // batch_size + 1,
+                            batch_task_ids=[t.id for t in batch],
+                            data=response_data
+                        )
                         continue
                         
                 except Exception as e:
-                    self.logger.error("batch_failed", error=str(e))
+                    self.logger.error(
+                        "batch_failed", 
+                        error=str(e),
+                        batch_index=i // batch_size + 1,
+                        batch_task_ids=[t.id for t in batch]
+                    )
                     continue
             
             # Create final combined rankings
@@ -189,13 +205,14 @@ Tasks:
             ranked_ids = {r.task_id for r in final_rankings.rankings}
             task_ids = {t.id for t in tasks}
             
+            missing_task_ids = task_ids - ranked_ids
+            extra_task_ids = ranked_ids - task_ids
+            
             if ranked_ids != task_ids:
-                missing = task_ids - ranked_ids
-                extra = ranked_ids - task_ids
                 self.logger.warning(
                     "ranking_mismatch",
-                    missing_tasks=list(missing),
-                    extra_tasks=list(extra),
+                    missing_tasks=list(missing_task_ids),
+                    extra_tasks=list(extra_task_ids),
                     ranked_count=len(ranked_ids),
                     total_count=len(task_ids)
                 )
