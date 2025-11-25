@@ -366,29 +366,30 @@ def organize_today_view(
             print("\n❌ Organization cancelled.\n")
             return 0
         
-        # Step 6: Update due dates - Add tasks to Today
+        # Step 6: Update due dates - Ensure ALL selected tasks have due date set to "today"
+        # This includes both tasks being added and tasks already in Today that are staying
         # Skip recurring tasks as they manage their own schedule
-        if tasks_to_add:
-            logger.info("adding_tasks_to_today")
-            print("\n📥 Adding tasks to Today...")
-            
-            # Filter out recurring tasks
-            non_recurring_to_add = [task for task in tasks_to_add if not task.is_recurring]
-            recurring_to_add = [task for task in tasks_to_add if task.is_recurring]
-            
-            if recurring_to_add:
-                print(f"   ⏭️  Skipped {len(recurring_to_add)} recurring task(s) (recurring tasks keep their schedule)")
-                for task in recurring_to_add:
-                    print(f"      • {task.content[:50]}...")
-            
-            if non_recurring_to_add:
-                add_updates = [(task.id, "today") for task in non_recurring_to_add]
-                results = todoist_client.batch_update_due_dates(add_updates)
-                print(f"   ✅ Added to Today: {results['successful']} task(s)")
-                if results['failed'] > 0:
-                    print(f"   ❌ Failed to add: {results['failed']} task(s)")
-            elif recurring_to_add:
-                print("   ℹ️  No non-recurring tasks to add.")
+        logger.info("setting_due_dates_to_today")
+        print("\n📅 Setting due dates to Today for all selected tasks...")
+        
+        # Get all non-recurring selected tasks that need their date set to today
+        non_recurring_selected = [task for task in selected_tasks if not task.is_recurring]
+        recurring_selected = [task for task in selected_tasks if task.is_recurring]
+        
+        if recurring_selected:
+            print(f"   ⏭️  Skipped {len(recurring_selected)} recurring task(s) (recurring tasks keep their schedule)")
+            for task in recurring_selected:
+                print(f"      • {task.content[:50]}...")
+        
+        if non_recurring_selected:
+            # Set all selected tasks (both new and existing) to "today"
+            today_updates = [(task.id, "today") for task in non_recurring_selected]
+            results = todoist_client.batch_update_due_dates(today_updates)
+            print(f"   ✅ Set due date to Today: {results['successful']} task(s)")
+            if results['failed'] > 0:
+                print(f"   ❌ Failed to set due date: {results['failed']} task(s)")
+        elif recurring_selected:
+            print("   ℹ️  No non-recurring tasks to update.")
         
         # Step 7: Update due dates - Remove tasks from Today (reschedule to tomorrow)
         # Skip recurring tasks as they manage their own schedule
