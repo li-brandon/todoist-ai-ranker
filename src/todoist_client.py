@@ -355,7 +355,7 @@ class TodoistClient:
     
     def batch_update_due_dates(
         self,
-        updates: List[tuple[str, Optional[str]]],
+        updates: list[tuple[str, Optional[str]]],
         dry_run: bool = False
     ) -> dict:
         """Update multiple task due dates.
