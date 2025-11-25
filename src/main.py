@@ -281,7 +281,11 @@ def organize_today_view(
         logger.info("fetching_current_today_tasks")
         print("📅 Fetching current Today view...")
         
-        current_today_tasks = todoist_client.get_today_tasks()
+        current_today_tasks = todoist_client.get_tasks(
+            filter_query="today",
+            project_id=project_id,
+            label=label
+        )
         current_today_ids = {t.id for t in current_today_tasks}
         
         print(f"   Found {len(current_today_tasks)} task(s) currently in Today\n")
