@@ -538,3 +538,127 @@ class TodoistClient:
             self.logger.warning("inbox_project_not_found")
             return []
         return self.get_tasks(project_id=inbox_id)
+    
+    def move_task_to_project(
+        self,
+        task_id: str,
+        project_id: Optional[str],
+        dry_run: bool = False
+    ) -> bool:
+        """Move a task to a different project using the Sync API.
+        
+        Note: The REST API v2 does not support moving tasks between projects.
+        We must use the Sync API's item_move command.
+        
+        Args:
+            task_id: ID of the task to move
+            project_id: ID of the target project, or None to keep in current project
+            dry_run: If True, don't actually move the task
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not project_id:
+            # No project specified, nothing to do
+            return True
+            
+        if dry_run:
+            self.logger.info(
+                "dry_run_move_task",
+                task_id=task_id,
+                project_id=project_id
+            )
+            return True
+        
+        try:
+            self.logger.info(
+                "moving_task_to_project",
+                task_id=task_id,
+                project_id=project_id
+            )
+            
+            # Use Sync API to move task between projects
+            # REST API v2 does not support changing project_id
+            import uuid
+            cmd = {
+                "type": "item_move",
+                "uuid": str(uuid.uuid4()),
+                "args": {
+                    "id": task_id,
+                    "project_id": project_id
+                }
+            }
+            
+            response = self._api_call_with_retry(
+                lambda: requests.post(
+                    "https://api.todoist.com/sync/v9/sync",
+                    headers=self.headers,
+                    json={"commands": [cmd]},
+                    timeout=self.settings.api_timeout
+                )
+            )
+            response.raise_for_status()
+            
+            result = response.json()
+            if result.get("sync_status", {}).get(cmd["uuid"]) == "ok":
+                self.logger.info("task_moved", task_id=task_id, project_id=project_id)
+                return True
+            else:
+                # Check for specific error
+                error_info = result.get("sync_status", {}).get(cmd["uuid"], "Unknown error")
+                self.logger.error(
+                    "move_task_sync_failed",
+                    task_id=task_id,
+                    project_id=project_id,
+                    sync_status=error_info
+                )
+                return False
+            
+        except Exception as e:
+            self.logger.error(
+                "move_task_failed",
+                task_id=task_id,
+                project_id=project_id,
+                error=str(e)
+            )
+            return False
+    
+    def batch_move_tasks(
+        self,
+        moves: list[tuple[str, Optional[str]]],
+        dry_run: bool = False
+    ) -> dict:
+        """Move multiple tasks to different projects.
+        
+        Args:
+            moves: List of (task_id, project_id) tuples. project_id can be None to keep in current project.
+            dry_run: If True, don't actually move tasks
+            
+        Returns:
+            Dict with 'successful' and 'failed' counts
+        """
+        results = {'successful': 0, 'failed': 0}
+        
+        self.logger.info(
+            "batch_move_started",
+            total_tasks=len(moves),
+            dry_run=dry_run
+        )
+        
+        for task_id, project_id in moves:
+            if self.move_task_to_project(task_id, project_id, dry_run):
+                results['successful'] += 1
+            else:
+                results['failed'] += 1
+            
+            # Small delay between updates to be respectful
+            if not dry_run:
+                time.sleep(0.1)
+        
+        self.logger.info(
+            "batch_move_completed",
+            successful=results['successful'],
+            failed=results['failed']
+        )
+        
+        return results

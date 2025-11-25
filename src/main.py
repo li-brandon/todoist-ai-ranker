@@ -8,7 +8,7 @@ from typing import Optional
 from .config import get_settings
 from .todoist_client import TodoistClient
 from .ai_ranker import AIRanker
-from .models import TodoistTask, PriorityRankings
+from .models import TodoistTask, TodoistProject, PriorityRankings, InboxOrganizations
 
 
 # Configure structured logging
@@ -199,6 +199,311 @@ def list_inbox_tasks(todoist_client: TodoistClient, verbose: bool = False) -> in
         return 1
     except Exception as e:
         logger.error("list_inbox_tasks_error", error=str(e), exc_info=True)
+        print(f"\n❌ Error: {e}\n")
+        return 1
+
+
+def print_inbox_organization_summary(
+    tasks: list[TodoistTask],
+    organizations: InboxOrganizations,
+    projects: list[TodoistProject],
+    dry_run: bool = False
+) -> None:
+    """Print summary of inbox organization suggestions.
+    
+    Args:
+        tasks: All inbox tasks
+        organizations: AI-determined organizations
+        projects: Available projects
+        dry_run: Whether this is a dry run
+    """
+    print("\n" + "=" * 60)
+    print("  Inbox Organization" + (" (DRY RUN)" if dry_run else ""))
+    print("=" * 60 + "\n")
+    
+    # Create project map for lookup
+    project_map = {p.id: p for p in projects}
+    
+    # Group by action type
+    tasks_to_move = []
+    tasks_staying = []
+    tasks_with_due_dates = []
+    tasks_without_due_dates = []
+    priority_updates = []
+    
+    for task in tasks:
+        org = organizations.get_organization_for_task(task.id)
+        if not org:
+            continue
+        
+        # Check if moving to different project
+        if org.project_id and org.project_id != task.project_id:
+            tasks_to_move.append((task, org))
+        else:
+            tasks_staying.append((task, org))
+        
+        # Check due date changes
+        current_due = task.due.string or task.due.date if task.due else None
+        if org.due_date and org.due_date != current_due:
+            tasks_with_due_dates.append((task, org))
+        elif not org.due_date and current_due:
+            tasks_without_due_dates.append((task, org))
+        
+        # Check priority changes
+        if task.priority != org.todoist_priority:
+            priority_updates.append((task, org))
+    
+    # Summary statistics
+    print(f"📊 Summary:")
+    print(f"   Total tasks: {len(tasks)}")
+    print(f"   Tasks to move: {len(tasks_to_move)}")
+    print(f"   Tasks staying in Inbox: {len(tasks_staying)}")
+    print(f"   Due dates to set: {len(tasks_with_due_dates)}")
+    print(f"   Due dates to remove: {len(tasks_without_due_dates)}")
+    print(f"   Priority updates: {len(priority_updates)}")
+    print()
+    
+    # Show tasks to move
+    if tasks_to_move:
+        print("-" * 60)
+        print("  📤 Tasks to Move to Projects")
+        print("-" * 60 + "\n")
+        
+        for task, org in sorted(tasks_to_move, key=lambda x: (x[1].todoist_priority, x[1].priority_score), reverse=True):
+            project_name = org.project_name or (project_map.get(org.project_id).name if org.project_id and org.project_id in project_map else "Unknown")
+            print(f"📝 {task.content[:50]}...")
+            print(f"   → Move to: {project_name}")
+            print(f"   Priority: {org.priority_level} (score: {org.priority_score})")
+            if org.due_date:
+                print(f"   Due date: {org.due_date}")
+            print(f"   Reasoning: {org.reasoning}")
+            print()
+    
+    # Show tasks staying in Inbox
+    if tasks_staying:
+        print("-" * 60)
+        print("  📥 Tasks Staying in Inbox")
+        print("-" * 60 + "\n")
+        
+        for task, org in sorted(tasks_staying, key=lambda x: (x[1].todoist_priority, x[1].priority_score), reverse=True):
+            print(f"📝 {task.content[:50]}...")
+            print(f"   Priority: {org.priority_level} (score: {org.priority_score})")
+            if org.due_date:
+                print(f"   Due date: {org.due_date}")
+            print(f"   Reasoning: {org.reasoning}")
+            print()
+    
+    # Show due date changes
+    if tasks_with_due_dates:
+        print("-" * 60)
+        print("  📅 Due Dates to Set")
+        print("-" * 60 + "\n")
+        
+        for task, org in tasks_with_due_dates[:10]:
+            current_due = task.due.string or task.due.date if task.due else "none"
+            print(f"📝 {task.content[:50]}...")
+            print(f"   {current_due} → {org.due_date}")
+            print()
+        
+        if len(tasks_with_due_dates) > 10:
+            print(f"   ... and {len(tasks_with_due_dates) - 10} more task(s)\n")
+    
+    if tasks_without_due_dates:
+        print("-" * 60)
+        print("  📅 Due Dates to Remove")
+        print("-" * 60 + "\n")
+        
+        for task, org in tasks_without_due_dates[:10]:
+            current_due = task.due.string or task.due.date if task.due else "none"
+            print(f"📝 {task.content[:50]}...")
+            print(f"   {current_due} → (no date)")
+            print()
+        
+        if len(tasks_without_due_dates) > 10:
+            print(f"   ... and {len(tasks_without_due_dates) - 10} more task(s)\n")
+    
+    print("=" * 60 + "\n")
+
+
+def organize_inbox(
+    todoist_client: TodoistClient,
+    ai_ranker: AIRanker,
+    settings,
+    dry_run: bool = False,
+    verbose: bool = False
+) -> int:
+    """Organize inbox tasks by assigning them to projects, setting due dates, and updating priorities.
+    
+    This function:
+    1. Fetches all tasks from the Inbox
+    2. Fetches all available projects
+    3. Uses AI to suggest the best project, due date, and priority for each task
+    4. Applies the suggestions (with confirmation)
+    
+    Args:
+        todoist_client: Todoist API client
+        ai_ranker: AI ranker instance
+        settings: Application settings
+        dry_run: If True, don't actually update tasks
+        verbose: If True, show detailed output
+        
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    try:
+        print_banner()
+        
+        # Step 1: Get inbox project ID
+        logger.info("getting_inbox_project_id")
+        print("📥 Finding Inbox...")
+        inbox_id = todoist_client.get_inbox_project_id()
+        
+        if not inbox_id:
+            print("❌ Could not find Inbox project!\n")
+            return 1
+        
+        print(f"   Found Inbox (ID: {inbox_id})\n")
+        
+        # Step 2: Fetch inbox tasks
+        logger.info("fetching_inbox_tasks")
+        print("📋 Fetching tasks from Inbox...")
+        inbox_tasks = todoist_client.get_inbox_tasks()
+        
+        if not inbox_tasks:
+            print("✅ No tasks found in Inbox!\n")
+            return 0
+        
+        print(f"   Found {len(inbox_tasks)} task(s) in Inbox\n")
+        
+        # Step 3: Fetch all projects
+        logger.info("fetching_projects")
+        print("📁 Fetching available projects...")
+        projects = todoist_client.get_projects()
+        
+        # Filter out archived projects and inbox itself
+        available_projects = [
+            p for p in projects 
+            if not p.is_archived and p.id != inbox_id
+        ]
+        
+        print(f"   Found {len(available_projects)} available project(s)\n")
+        
+        if not available_projects:
+            print("⚠️  No projects available (excluding Inbox and archived projects)")
+            print("   Tasks will be organized but may stay in Inbox.\n")
+        
+        # Step 4: Organize tasks with AI
+        logger.info("organizing_inbox_with_ai")
+        print("🤖 Analyzing tasks with AI...")
+        print("   This may take a moment...\n")
+        
+        organizations = ai_ranker.organize_inbox_tasks(inbox_tasks, projects)
+        
+        organized_count = len(organizations.organizations)
+        print(f"   Organized {organized_count} task(s)")
+        
+        if organized_count < len(inbox_tasks):
+            print(f"   ⚠️  {len(inbox_tasks) - organized_count} task(s) did not receive organization suggestions")
+        
+        print()
+        
+        # Step 5: Display summary
+        print_inbox_organization_summary(inbox_tasks, organizations, projects, dry_run)
+        
+        if dry_run:
+            print("ℹ️  This was a dry run. No tasks were updated.")
+            print("   Remove --dry-run to apply changes.\n")
+            return 0
+        
+        # Step 6: Confirm before updating
+        print("Do you want to organize your Inbox with these suggestions? (y/N): ", end="")
+        confirmation = input().strip().lower()
+        
+        if confirmation != 'y':
+            print("\n❌ Organization cancelled.\n")
+            return 0
+        
+        # Step 7: Apply changes
+        results = {
+            'moved': {'successful': 0, 'failed': 0},
+            'due_dates': {'successful': 0, 'failed': 0},
+            'priorities': {'successful': 0, 'failed': 0}
+        }
+        
+        # Move tasks to projects
+        logger.info("moving_tasks_to_projects")
+        print("\n📤 Moving tasks to projects...")
+        
+        moves = []
+        for task in inbox_tasks:
+            org = organizations.get_organization_for_task(task.id)
+            if org and org.project_id and org.project_id != task.project_id:
+                moves.append((task.id, org.project_id))
+        
+        if moves:
+            move_results = todoist_client.batch_move_tasks(moves, dry_run=False)
+            results['moved'] = move_results
+            print(f"   ✅ Moved: {move_results['successful']} task(s)")
+            if move_results['failed'] > 0:
+                print(f"   ❌ Failed: {move_results['failed']} task(s)")
+        else:
+            print("   ℹ️  No tasks to move.")
+        
+        # Update due dates
+        logger.info("updating_due_dates")
+        print("\n📅 Updating due dates...")
+        
+        due_date_updates = []
+        for task in inbox_tasks:
+            org = organizations.get_organization_for_task(task.id)
+            if org:
+                current_due = task.due.string or task.due.date if task.due else None
+                if org.due_date != current_due:
+                    due_date_updates.append((task.id, org.due_date))
+        
+        if due_date_updates:
+            due_results = todoist_client.batch_update_due_dates(due_date_updates, dry_run=False)
+            results['due_dates'] = due_results
+            print(f"   ✅ Updated: {due_results['successful']} task(s)")
+            if due_results['failed'] > 0:
+                print(f"   ❌ Failed: {due_results['failed']} task(s)")
+        else:
+            print("   ℹ️  No due dates to update.")
+        
+        # Update priorities
+        logger.info("updating_priorities")
+        print("\n🎯 Updating priorities...")
+        
+        priority_updates = []
+        for task in inbox_tasks:
+            org = organizations.get_organization_for_task(task.id)
+            if org and task.priority != org.todoist_priority:
+                priority_updates.append((task.id, org.todoist_priority))
+        
+        if priority_updates:
+            priority_results = todoist_client.batch_update_priorities(priority_updates, dry_run=False)
+            results['priorities'] = priority_results
+            print(f"   ✅ Updated: {priority_results['successful']} task(s)")
+            if priority_results['failed'] > 0:
+                print(f"   ❌ Failed: {priority_results['failed']} task(s)")
+        else:
+            print("   ℹ️  No priorities to update.")
+        
+        # Summary
+        total_changes = (
+            results['moved']['successful'] +
+            results['due_dates']['successful'] +
+            results['priorities']['successful']
+        )
+        
+        print(f"\n✨ Done! Applied {total_changes} change(s) to {len(inbox_tasks)} task(s).\n")
+        return 0
+        
+    except KeyboardInterrupt:
+        print("\n\n❌ Interrupted by user.\n")
+        return 1
+    except Exception as e:
+        logger.error("organize_inbox_error", error=str(e), exc_info=True)
         print(f"\n❌ Error: {e}\n")
         return 1
 
@@ -697,7 +1002,8 @@ def main(
     organize_today: bool = False,
     today_limit: Optional[int] = None,
     list_projects_flag: bool = False,
-    list_inbox_flag: bool = False
+    list_inbox_flag: bool = False,
+    organize_inbox_flag: bool = False
 ) -> int:
     """Main application logic.
     
@@ -711,6 +1017,7 @@ def main(
         today_limit: Optional limit for Today view organization (overrides config)
         list_projects_flag: If True, list all projects and exit
         list_inbox_flag: If True, list all inbox tasks and exit
+        organize_inbox_flag: If True, organize inbox tasks (assign to projects, set dates, update priorities)
         
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -734,6 +1041,16 @@ def main(
         
         print_banner()
         ai_ranker = AIRanker(settings)
+        
+        # Handle inbox organization
+        if organize_inbox_flag:
+            return organize_inbox(
+                todoist_client=todoist_client,
+                ai_ranker=ai_ranker,
+                settings=settings,
+                dry_run=dry_run,
+                verbose=verbose
+            )
         
         # Handle Today view organization
         if organize_today:
@@ -926,6 +1243,11 @@ if __name__ == "__main__":
         action="store_true",
         help="List all tasks currently in the Inbox and exit"
     )
+    parser.add_argument(
+        "--organize-inbox",
+        action="store_true",
+        help="Organize inbox tasks: assign to best projects, set due dates, and update priorities"
+    )
     
     args = parser.parse_args()
     
@@ -938,5 +1260,6 @@ if __name__ == "__main__":
         organize_today=args.organize_today,
         today_limit=args.today_limit,
         list_projects_flag=args.list_projects,
-        list_inbox_flag=args.list_inbox
+        list_inbox_flag=args.list_inbox,
+        organize_inbox_flag=args.organize_inbox
     ))
