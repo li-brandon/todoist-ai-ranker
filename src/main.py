@@ -8,7 +8,7 @@ from typing import Optional
 from .config import get_settings
 from .todoist_client import TodoistClient
 from .ai_ranker import AIRanker
-from .models import TodoistTask, PriorityRankings
+from .models import TodoistTask, TodoistProject, PriorityRankings
 
 
 # Configure structured logging
@@ -34,6 +34,88 @@ def print_banner():
     print("  Todoist AI Task Ranker")
     print("  Automatically prioritize your tasks using AI")
     print("=" * 60 + "\n")
+
+
+def list_projects(todoist_client: TodoistClient) -> int:
+    """List all Todoist projects.
+    
+    Args:
+        todoist_client: Todoist API client
+        
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    try:
+        print_banner()
+        print("📋 Fetching projects from Todoist...\n")
+        
+        projects = todoist_client.get_projects()
+        
+        if not projects:
+            print("✅ No projects found!\n")
+            return 0
+        
+        # Sort projects by order (or name if order is the same)
+        sorted_projects = sorted(projects, key=lambda p: (p.order, p.name))
+        
+        # Group by parent (if any)
+        root_projects = [p for p in sorted_projects if p.parent_id is None]
+        child_projects = {p.parent_id: [] for p in sorted_projects if p.parent_id is not None}
+        for p in sorted_projects:
+            if p.parent_id:
+                child_projects[p.parent_id].append(p)
+        
+        print(f"Found {len(projects)} project(s):\n")
+        print("-" * 60)
+        
+        for project in root_projects:
+            # Print project info
+            favorite_marker = "⭐ " if project.is_favorite else ""
+            archived_marker = " (archived)" if project.is_archived else ""
+            print(f"{favorite_marker}{project.name}")
+            print(f"  ID: {project.id}")
+            if project.color:
+                print(f"  Color: {project.color}")
+            if project.view_style:
+                print(f"  View: {project.view_style}")
+            print(f"  URL: {project.url}{archived_marker}")
+            
+            # Print child projects if any
+            if project.id in child_projects:
+                print("  Sub-projects:")
+                for child in sorted(child_projects[project.id], key=lambda p: (p.order, p.name)):
+                    child_favorite = "⭐ " if child.is_favorite else ""
+                    child_archived = " (archived)" if child.is_archived else ""
+                    print(f"    {child_favorite}{child.name} (ID: {child.id}){child_archived}")
+            
+            print()
+        
+        # Print orphaned child projects (if any)
+        orphaned = []
+        for project in sorted_projects:
+            if project.parent_id and project.parent_id not in {p.id for p in root_projects}:
+                orphaned.append(project)
+        
+        if orphaned:
+            print("  Orphaned sub-projects (parent not found):")
+            for child in sorted(orphaned, key=lambda p: (p.order, p.name)):
+                child_favorite = "⭐ " if child.is_favorite else ""
+                child_archived = " (archived)" if child.is_archived else ""
+                print(f"    {child_favorite}{child.name} (ID: {child.id}, Parent: {child.parent_id}){child_archived}")
+            print()
+        
+        print("-" * 60)
+        print(f"\n✨ Total: {len(projects)} project(s)\n")
+        
+        return 0
+        
+    except KeyboardInterrupt:
+        print("\n\n❌ Interrupted by user.\n")
+        return 1
+    except Exception as e:
+        logger.error("list_projects_error", error=str(e), exc_info=True)
+        print(f"\n❌ Error: {e}\n")
+        return 1
 
 
 def print_missing_tasks(
@@ -528,7 +610,8 @@ def main(
     filter_query: Optional[str] = None,
     verbose: bool = False,
     organize_today: bool = False,
-    today_limit: Optional[int] = None
+    today_limit: Optional[int] = None,
+    list_projects_flag: bool = False
 ) -> int:
     """Main application logic.
     
@@ -540,13 +623,12 @@ def main(
         verbose: If True, show detailed output
         organize_today: If True, organize Today view with optimal task distribution
         today_limit: Optional limit for Today view organization (overrides config)
+        list_projects_flag: If True, list all projects and exit
         
     Returns:
         Exit code (0 for success, 1 for failure)
     """
     try:
-        print_banner()
-        
         # Load configuration
         logger.info("loading_configuration")
         settings = get_settings()
@@ -554,6 +636,12 @@ def main(
         # Initialize clients
         logger.info("initializing_clients")
         todoist_client = TodoistClient(settings)
+        
+        # Handle project listing
+        if list_projects_flag:
+            return list_projects(todoist_client)
+        
+        print_banner()
         ai_ranker = AIRanker(settings)
         
         # Handle Today view organization
@@ -737,6 +825,11 @@ if __name__ == "__main__":
         type=int,
         help="Maximum number of tasks to include in organized Today view (overrides config default)"
     )
+    parser.add_argument(
+        "--list-projects",
+        action="store_true",
+        help="List all Todoist projects and exit"
+    )
     
     args = parser.parse_args()
     
@@ -747,5 +840,6 @@ if __name__ == "__main__":
         filter_query=args.filter,
         verbose=args.verbose,
         organize_today=args.organize_today,
-        today_limit=args.today_limit
+        today_limit=args.today_limit,
+        list_projects_flag=args.list_projects
     ))

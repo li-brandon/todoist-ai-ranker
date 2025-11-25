@@ -99,6 +99,22 @@ See what changes would be made without updating:
 python -m src.main --dry-run
 ```
 
+### List Projects
+
+List all your Todoist projects with their IDs:
+
+```bash
+python -m src.main --list-projects
+```
+
+This will display all projects, including:
+
+- Project names and IDs (needed for `--project` filter)
+- Favorite projects (marked with ⭐)
+- Archived projects
+- Sub-projects (nested under parent projects)
+- Project colors and view styles
+
 ### Filter Tasks
 
 Rank tasks in a specific project:
@@ -106,6 +122,8 @@ Rank tasks in a specific project:
 ```bash
 python -m src.main --project PROJECT_ID
 ```
+
+Use `--list-projects` first to find the project ID you need.
 
 Rank tasks with a specific label:
 
