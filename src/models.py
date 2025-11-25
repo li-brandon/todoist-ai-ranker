@@ -14,6 +14,20 @@ class TodoistDueDate(BaseModel):
     timezone: Optional[str] = None
 
 
+class TodoistProject(BaseModel):
+    """Todoist project model."""
+    
+    id: str
+    name: str
+    color: Optional[str] = None
+    parent_id: Optional[str] = None
+    order: int = 0
+    is_archived: bool = False
+    is_favorite: bool = False
+    view_style: Optional[str] = None
+    url: str
+
+
 class TodoistTask(BaseModel):
     """Todoist task model."""
     

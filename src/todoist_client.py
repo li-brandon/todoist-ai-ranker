@@ -16,7 +16,7 @@ from tenacity import (
 from requests.exceptions import RequestException, HTTPError
 
 from .config import Settings
-from .models import TodoistTask
+from .models import TodoistTask, TodoistProject
 
 logger = structlog.get_logger()
 
@@ -459,3 +459,54 @@ class TodoistClient:
         except Exception as e:
             self.logger.error("reorder_failed", error=str(e))
             return False
+    
+    def get_projects(self) -> List[TodoistProject]:
+        """Fetch all projects from Todoist.
+        
+        Returns:
+            List of TodoistProject objects
+        """
+        try:
+            self.logger.info("fetching_projects")
+            
+            # Fetch projects with retry
+            response = self._api_call_with_retry(
+                lambda: requests.get(
+                    f"{self.BASE_URL}/projects",
+                    headers=self.headers,
+                    timeout=self.settings.api_timeout
+                )
+            )
+            response.raise_for_status()
+            projects_data = response.json()
+            
+            # Convert to our model
+            todoist_projects = []
+            for project_dict in projects_data:
+                try:
+                    parsed_project = {
+                        'id': project_dict['id'],
+                        'name': project_dict['name'],
+                        'color': project_dict.get('color'),
+                        'parent_id': project_dict.get('parent_id'),
+                        'order': project_dict.get('order', 0),
+                        'is_archived': project_dict.get('is_archived', False),
+                        'is_favorite': project_dict.get('is_favorite', False),
+                        'view_style': project_dict.get('view_style'),
+                        'url': project_dict['url'],
+                    }
+                    todoist_projects.append(TodoistProject(**parsed_project))
+                except Exception as e:
+                    self.logger.error(
+                        "project_conversion_failed",
+                        project_id=project_dict.get('id', 'unknown'),
+                        error=str(e)
+                    )
+                    continue
+            
+            self.logger.info("projects_fetched", count=len(todoist_projects))
+            return todoist_projects
+            
+        except Exception as e:
+            self.logger.error("fetch_projects_failed", error=str(e))
+            raise
