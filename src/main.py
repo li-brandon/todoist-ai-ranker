@@ -118,6 +118,91 @@ def list_projects(todoist_client: TodoistClient) -> int:
         return 1
 
 
+def list_inbox_tasks(todoist_client: TodoistClient, verbose: bool = False) -> int:
+    """List all tasks currently in the Inbox.
+    
+    Args:
+        todoist_client: Todoist API client
+        verbose: If True, show detailed task information
+        
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    try:
+        print_banner()
+        print("📥 Fetching tasks from Inbox...\n")
+        
+        inbox_tasks = todoist_client.get_inbox_tasks()
+        
+        if not inbox_tasks:
+            print("✅ No tasks found in Inbox!\n")
+            return 0
+        
+        # Sort tasks by priority (highest first) and then by creation date
+        sorted_tasks = sorted(
+            inbox_tasks,
+            key=lambda t: (t.priority, t.created_at),
+            reverse=True
+        )
+        
+        print(f"Found {len(inbox_tasks)} task(s) in Inbox:\n")
+        print("-" * 60)
+        
+        for task in sorted_tasks:
+            priority_marker = {
+                4: "🔴 P1",
+                3: "🟠 P2",
+                2: "🟡 P3",
+                1: "⚪ P4"
+            }.get(task.priority, "❓")
+            
+            print(f"{priority_marker} {task.content}")
+            
+            if verbose or task.description:
+                if task.description:
+                    desc = task.description[:60] + "..." if len(task.description) > 60 else task.description
+                    print(f"   Description: {desc}")
+            
+            if task.due:
+                due_str = task.due.string or task.due.date
+                print(f"   Due: {due_str}")
+            
+            if task.labels:
+                print(f"   Labels: {', '.join(task.labels)}")
+            
+            print(f"   ID: {task.id}")
+            print(f"   URL: {task.url}")
+            print()
+        
+        # Summary
+        priority_counts = {4: 0, 3: 0, 2: 0, 1: 0}
+        for task in inbox_tasks:
+            priority_counts[task.priority] = priority_counts.get(task.priority, 0) + 1
+        
+        print("-" * 60)
+        print(f"\n📊 Summary:")
+        print(f"   Total tasks: {len(inbox_tasks)}")
+        if priority_counts[4] > 0:
+            print(f"   P1 (Urgent): {priority_counts[4]}")
+        if priority_counts[3] > 0:
+            print(f"   P2 (High): {priority_counts[3]}")
+        if priority_counts[2] > 0:
+            print(f"   P3 (Medium): {priority_counts[2]}")
+        if priority_counts[1] > 0:
+            print(f"   P4 (Normal): {priority_counts[1]}")
+        print()
+        
+        return 0
+        
+    except KeyboardInterrupt:
+        print("\n\n❌ Interrupted by user.\n")
+        return 1
+    except Exception as e:
+        logger.error("list_inbox_tasks_error", error=str(e), exc_info=True)
+        print(f"\n❌ Error: {e}\n")
+        return 1
+
+
 def print_missing_tasks(
     tasks: list[TodoistTask],
     rankings: PriorityRankings,
@@ -611,7 +696,8 @@ def main(
     verbose: bool = False,
     organize_today: bool = False,
     today_limit: Optional[int] = None,
-    list_projects_flag: bool = False
+    list_projects_flag: bool = False,
+    list_inbox_flag: bool = False
 ) -> int:
     """Main application logic.
     
@@ -624,6 +710,7 @@ def main(
         organize_today: If True, organize Today view with optimal task distribution
         today_limit: Optional limit for Today view organization (overrides config)
         list_projects_flag: If True, list all projects and exit
+        list_inbox_flag: If True, list all inbox tasks and exit
         
     Returns:
         Exit code (0 for success, 1 for failure)
@@ -640,6 +727,10 @@ def main(
         # Handle project listing
         if list_projects_flag:
             return list_projects(todoist_client)
+        
+        # Handle inbox task listing
+        if list_inbox_flag:
+            return list_inbox_tasks(todoist_client, verbose=verbose)
         
         print_banner()
         ai_ranker = AIRanker(settings)
@@ -830,6 +921,11 @@ if __name__ == "__main__":
         action="store_true",
         help="List all Todoist projects and exit"
     )
+    parser.add_argument(
+        "--list-inbox",
+        action="store_true",
+        help="List all tasks currently in the Inbox and exit"
+    )
     
     args = parser.parse_args()
     
@@ -841,5 +937,6 @@ if __name__ == "__main__":
         verbose=args.verbose,
         organize_today=args.organize_today,
         today_limit=args.today_limit,
-        list_projects_flag=args.list_projects
+        list_projects_flag=args.list_projects,
+        list_inbox_flag=args.list_inbox
     ))

@@ -115,6 +115,29 @@ This will display all projects, including:
 - Sub-projects (nested under parent projects)
 - Project colors and view styles
 
+### List Inbox Tasks
+
+List all tasks currently in your Inbox:
+
+```bash
+python -m src.main --list-inbox
+```
+
+With detailed information:
+
+```bash
+python -m src.main --list-inbox --verbose
+```
+
+This will display:
+
+- All tasks in the Inbox
+- Task priorities (P1-P4) with visual markers
+- Due dates (if set)
+- Labels (if any)
+- Task IDs and URLs
+- Summary statistics
+
 ### Filter Tasks
 
 Rank tasks in a specific project:

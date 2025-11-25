@@ -510,3 +510,31 @@ class TodoistClient:
         except Exception as e:
             self.logger.error("fetch_projects_failed", error=str(e))
             raise
+    
+    def get_inbox_project_id(self) -> Optional[str]:
+        """Get the ID of the Inbox project.
+        
+        Returns:
+            Inbox project ID, or None if not found
+        """
+        try:
+            projects = self.get_projects()
+            for project in projects:
+                if project.name.lower() == "inbox":
+                    return project.id
+            return None
+        except Exception as e:
+            self.logger.error("get_inbox_project_id_failed", error=str(e))
+            return None
+    
+    def get_inbox_tasks(self) -> List[TodoistTask]:
+        """Fetch all tasks from the Inbox.
+        
+        Returns:
+            List of TodoistTask objects in the Inbox
+        """
+        inbox_id = self.get_inbox_project_id()
+        if not inbox_id:
+            self.logger.warning("inbox_project_not_found")
+            return []
+        return self.get_tasks(project_id=inbox_id)
