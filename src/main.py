@@ -52,7 +52,7 @@ def list_projects(todoist_client: TodoistClient) -> int:
         projects = todoist_client.get_projects()
         
         if not projects:
-            print("✅ No projects found!\n")
+            print("ℹ️  No projects found.\n")
             return 0
         
         # Sort projects by order (or name if order is the same)
