@@ -8,7 +8,7 @@ from typing import Optional
 from .config import get_settings
 from .todoist_client import TodoistClient
 from .ai_ranker import AIRanker
-from .models import TodoistTask, TodoistProject, PriorityRankings
+from .models import TodoistTask, PriorityRankings
 
 
 # Configure structured logging
