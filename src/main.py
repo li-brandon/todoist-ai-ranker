@@ -93,7 +93,7 @@ def list_projects(todoist_client: TodoistClient) -> int:
         # Print orphaned child projects (if any)
         orphaned = []
         for project in sorted_projects:
-            if project.parent_id and project.parent_id not in {p.id for p in root_projects}:
+            if project.parent_id and project.parent_id not in {p.id for p in sorted_projects}:
                 orphaned.append(project)
         
         if orphaned:
