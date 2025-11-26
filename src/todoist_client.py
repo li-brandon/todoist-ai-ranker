@@ -5,7 +5,7 @@ import logging
 import structlog
 import requests
 from collections import deque
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from tenacity import (
     retry,
     stop_after_attempt,
@@ -355,7 +355,7 @@ class TodoistClient:
     
     def batch_update_due_dates(
         self,
-        updates: list[tuple[str, Optional[str]]],
+        updates: List[Tuple[str, Optional[str]]],
         dry_run: bool = False
     ) -> dict:
         """Update multiple task due dates.
@@ -625,7 +625,7 @@ class TodoistClient:
     
     def batch_move_tasks(
         self,
-        moves: list[tuple[str, Optional[str]]],
+        moves: List[Tuple[str, Optional[str]]],
         dry_run: bool = False
     ) -> dict:
         """Move multiple tasks to different projects.

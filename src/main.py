@@ -4,6 +4,7 @@ import sys
 import logging
 import structlog
 from typing import Optional
+from datetime import datetime, timedelta
 
 from .config import get_settings
 from .todoist_client import TodoistClient
@@ -26,6 +27,104 @@ structlog.configure(
 )
 
 logger = structlog.get_logger()
+
+
+def normalize_date_for_comparison(date_str: Optional[str], reference_date: Optional[str] = None) -> Optional[str]:
+    """Normalize a date string to ISO format (YYYY-MM-DD) for comparison.
+    
+    Handles:
+    - ISO date strings (YYYY-MM-DD)
+    - Natural language dates (today, tomorrow, next week, etc.)
+    - Uses reference_date (ISO format) as the base for relative dates if provided
+    
+    Args:
+        date_str: Date string to normalize (can be ISO format or natural language)
+        reference_date: Optional reference date in ISO format (YYYY-MM-DD) for relative dates.
+                       If None, uses today's date.
+    
+    Returns:
+        Normalized date string in ISO format (YYYY-MM-DD), or None if date_str is None/empty
+    """
+    if not date_str:
+        return None
+    
+    date_str = date_str.strip().lower()
+    
+    # Handle empty strings
+    if not date_str or date_str in ("none", "null", ""):
+        return None
+    
+    # If already in ISO format (YYYY-MM-DD), return as-is
+    try:
+        # Try parsing as ISO date
+        datetime.strptime(date_str, "%Y-%m-%d")
+        return date_str
+    except ValueError:
+        pass
+    
+    # Determine reference date (today)
+    if reference_date:
+        try:
+            ref_date = datetime.strptime(reference_date, "%Y-%m-%d").date()
+        except ValueError:
+            ref_date = datetime.now().date()
+    else:
+        ref_date = datetime.now().date()
+    
+    # Handle common natural language dates
+    if date_str == "today":
+        return ref_date.strftime("%Y-%m-%d")
+    elif date_str == "tomorrow":
+        return (ref_date + timedelta(days=1)).strftime("%Y-%m-%d")
+    elif date_str == "yesterday":
+        return (ref_date - timedelta(days=1)).strftime("%Y-%m-%d")
+    elif date_str in ("next week", "in a week"):
+        return (ref_date + timedelta(days=7)).strftime("%Y-%m-%d")
+    elif date_str in ("next month", "in a month"):
+        # Approximate: add 30 days
+        return (ref_date + timedelta(days=30)).strftime("%Y-%m-%d")
+    
+    # If we can't normalize, return None to indicate we should fall back to string comparison
+    return None
+
+
+def dates_are_equivalent(date1: Optional[str], date2: Optional[str]) -> bool:
+    """Check if two date strings represent the same date.
+    
+    Compares dates by:
+    1. Normalizing both to ISO format if possible (using today as reference for relative dates)
+    2. Comparing normalized ISO dates
+    3. Falling back to case-insensitive string comparison if normalization fails
+    
+    Args:
+        date1: First date string (could be ISO format or natural language)
+        date2: Second date string (could be ISO format or natural language)
+    
+    Returns:
+        True if dates are equivalent, False otherwise
+    """
+    # Both None/empty - equivalent
+    if not date1 and not date2:
+        return True
+    
+    # One is None, one isn't - not equivalent
+    if not date1 or not date2:
+        return False
+    
+    # Try to normalize both dates (using today's date as reference for relative dates)
+    normalized1 = normalize_date_for_comparison(date1)
+    normalized2 = normalize_date_for_comparison(date2)
+    
+    # If both normalized successfully, compare ISO dates
+    if normalized1 and normalized2:
+        return normalized1 == normalized2
+    
+    # If one normalized but the other didn't, they're likely different
+    if (normalized1 and not normalized2) or (not normalized1 and normalized2):
+        return False
+    
+    # Both failed to normalize - fall back to case-insensitive string comparison
+    return date1.strip().lower() == date2.strip().lower()
 
 
 def print_banner():
@@ -243,8 +342,11 @@ def print_inbox_organization_summary(
             tasks_staying.append((task, org))
         
         # Check due date changes
+        # Use string if available (natural language), otherwise use date (ISO format)
         current_due = task.due.string or task.due.date if task.due else None
-        if org.due_date and org.due_date != current_due:
+        
+        # Check if dates are actually different (using normalized comparison)
+        if org.due_date and not dates_are_equivalent(org.due_date, current_due):
             tasks_with_due_dates.append((task, org))
         elif not org.due_date and current_due:
             tasks_without_due_dates.append((task, org))
@@ -271,7 +373,8 @@ def print_inbox_organization_summary(
         
         for task, org in sorted(tasks_to_move, key=lambda x: (x[1].todoist_priority, x[1].priority_score), reverse=True):
             project_name = org.project_name or (project_map.get(org.project_id).name if org.project_id and org.project_id in project_map else "Unknown")
-            print(f"📝 {task.content[:50]}...")
+            content = task.content[:50] + "..." if len(task.content) > 50 else task.content
+            print(f"📝 {content}")
             print(f"   → Move to: {project_name}")
             print(f"   Priority: {org.priority_level} (score: {org.priority_score})")
             if org.due_date:
@@ -286,7 +389,8 @@ def print_inbox_organization_summary(
         print("-" * 60 + "\n")
         
         for task, org in sorted(tasks_staying, key=lambda x: (x[1].todoist_priority, x[1].priority_score), reverse=True):
-            print(f"📝 {task.content[:50]}...")
+            content = task.content[:50] + "..." if len(task.content) > 50 else task.content
+            print(f"📝 {content}")
             print(f"   Priority: {org.priority_level} (score: {org.priority_score})")
             if org.due_date:
                 print(f"   Due date: {org.due_date}")
@@ -301,7 +405,8 @@ def print_inbox_organization_summary(
         
         for task, org in tasks_with_due_dates[:10]:
             current_due = task.due.string or task.due.date if task.due else "none"
-            print(f"📝 {task.content[:50]}...")
+            content = task.content[:50] + "..." if len(task.content) > 50 else task.content
+            print(f"📝 {content}")
             print(f"   {current_due} → {org.due_date}")
             print()
         
@@ -315,7 +420,8 @@ def print_inbox_organization_summary(
         
         for task, org in tasks_without_due_dates[:10]:
             current_due = task.due.string or task.due.date if task.due else "none"
-            print(f"📝 {task.content[:50]}...")
+            content = task.content[:50] + "..." if len(task.content) > 50 else task.content
+            print(f"📝 {content}")
             print(f"   {current_due} → (no date)")
             print()
         
@@ -457,8 +563,10 @@ def organize_inbox(
         for task in inbox_tasks:
             org = organizations.get_organization_for_task(task.id)
             if org:
+                # Use string if available (natural language), otherwise use date (ISO format)
                 current_due = task.due.string or task.due.date if task.due else None
-                if org.due_date != current_due:
+                # Only update if dates are actually different (using normalized comparison)
+                if not dates_are_equivalent(org.due_date, current_due):
                     due_date_updates.append((task.id, org.due_date))
         
         if due_date_updates:
@@ -652,7 +760,8 @@ def print_today_organization_summary(
         for task, ranking in tasks_with_rankings:
             due_info = f" (due: {task.due.string or task.due.date})" if task.due else " (no due date)"
             recurring_note = " [RECURRING - will keep schedule]" if task.is_recurring else ""
-            print(f"➕ {task.content[:45]}...{due_info}{recurring_note}")
+            content = task.content[:45] + "..." if len(task.content) > 45 else task.content
+            print(f"➕ {content}{due_info}{recurring_note}")
             print(f"   {ranking.priority_level} (score: {ranking.priority_score})")
             print()
     
@@ -675,7 +784,8 @@ def print_today_organization_summary(
         )
         
         for task, ranking in tasks_with_rankings:
-            print(f"✅ {task.content[:50]}...")
+            content = task.content[:50] + "..." if len(task.content) > 50 else task.content
+            print(f"✅ {content}")
             print(f"   {ranking.priority_level} (score: {ranking.priority_score})")
             print()
     
@@ -688,10 +798,11 @@ def print_today_organization_summary(
         for task in tasks_to_remove[:10]:
             ranking = rankings.get_ranking_for_task(task.id)
             recurring_note = " [RECURRING - will keep schedule]" if task.is_recurring else ""
+            content = task.content[:50] + "..." if len(task.content) > 50 else task.content
             if ranking:
-                print(f"➖ {task.content[:50]}... ({ranking.priority_level}, score: {ranking.priority_score}){recurring_note}")
+                print(f"➖ {content} ({ranking.priority_level}, score: {ranking.priority_score}){recurring_note}")
             else:
-                print(f"➖ {task.content[:50]}...{recurring_note}")
+                print(f"➖ {content}{recurring_note}")
         
         if len(tasks_to_remove) > 10:
             print(f"   ... and {len(tasks_to_remove) - 10} more task(s)")
@@ -851,7 +962,8 @@ def organize_today_view(
         if recurring_selected:
             print(f"   ⏭️  Skipped {len(recurring_selected)} recurring task(s) (recurring tasks keep their schedule)")
             for task in recurring_selected:
-                print(f"      • {task.content[:50]}...")
+                content = task.content[:50] + "..." if len(task.content) > 50 else task.content
+                print(f"      • {content}")
         
         if non_recurring_selected:
             # Set all selected tasks (both new and existing) to "today"
@@ -876,7 +988,8 @@ def organize_today_view(
             if recurring_to_remove:
                 print(f"   ⏭️  Skipped {len(recurring_to_remove)} recurring task(s) (recurring tasks keep their schedule)")
                 for task in recurring_to_remove:
-                    print(f"      • {task.content[:50]}...")
+                    content = task.content[:50] + "..." if len(task.content) > 50 else task.content
+                    print(f"      • {content}")
             
             if non_recurring_to_remove:
                 remove_updates = [(task.id, "tomorrow") for task in non_recurring_to_remove]
@@ -980,7 +1093,8 @@ def print_task_changes(
             old_label = priority_labels[old_priority]
             new_label = ranking.priority_level
             
-            print(f"📝 {task.content[:50]}...")
+            content = task.content[:50] + "..." if len(task.content) > 50 else task.content
+            print(f"📝 {content}")
             print(f"   {old_label} → {new_label} (score: {ranking.priority_score})")
             print(f"   Reasoning: {ranking.reasoning}")
             print()
