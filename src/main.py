@@ -270,7 +270,7 @@ def print_inbox_organization_summary(
         print("-" * 60 + "\n")
         
         for task, org in sorted(tasks_to_move, key=lambda x: (x[1].todoist_priority, x[1].priority_score), reverse=True):
-            project_name = org.project_name or (project_map.get(org.project_id).name if org.project_id and org.project_id in project_map else "Unknown")
+            project_name = org.project_name or (project_map[org.project_id].name if org.project_id and org.project_id in project_map else "Unknown")
             print(f"📝 {task.content[:50]}...")
             print(f"   → Move to: {project_name}")
             print(f"   Priority: {org.priority_level} (score: {org.priority_score})")
