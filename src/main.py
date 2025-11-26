@@ -204,9 +204,9 @@ def list_inbox_tasks(todoist_client: TodoistClient, verbose: bool = False) -> in
 
 
 def print_inbox_organization_summary(
-    tasks: list[TodoistTask],
+    tasks: List[TodoistTask],
     organizations: InboxOrganizations,
-    projects: list[TodoistProject],
+    projects: List[TodoistProject],
     dry_run: bool = False
 ) -> None:
     """Print summary of inbox organization suggestions.
