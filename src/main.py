@@ -3,7 +3,7 @@
 import sys
 import logging
 import structlog
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timedelta
 
 from .config import get_settings
@@ -372,7 +372,7 @@ def print_inbox_organization_summary(
         print("-" * 60 + "\n")
         
         for task, org in sorted(tasks_to_move, key=lambda x: (x[1].todoist_priority, x[1].priority_score), reverse=True):
-            project_name = org.project_name or (project_map[org.project_id].name if org.project_id and org.project_id in project_map else "Unknown")
+            project_name = org.project_name or (project_map[org.project_id].name if org.project_id in project_map else "Unknown")
             content = task.content[:50] + "..." if len(task.content) > 50 else task.content
             print(f"📝 {content}")
             print(f"   → Move to: {project_name}")
@@ -617,7 +617,7 @@ def organize_inbox(
 
 
 def print_missing_tasks(
-    tasks: list[TodoistTask],
+    tasks: List[TodoistTask],
     rankings: PriorityRankings,
     show_all: bool = False
 ) -> None:
@@ -681,11 +681,11 @@ def print_missing_tasks(
 
 
 def print_today_organization_summary(
-    all_tasks: list[TodoistTask],
-    selected_tasks: list[TodoistTask],
-    tasks_to_add: list[TodoistTask],
-    tasks_to_remove: list[TodoistTask],
-    current_today_tasks: list[TodoistTask],
+    all_tasks: List[TodoistTask],
+    selected_tasks: List[TodoistTask],
+    tasks_to_add: List[TodoistTask],
+    tasks_to_remove: List[TodoistTask],
+    current_today_tasks: List[TodoistTask],
     rankings: PriorityRankings,
     limit: int,
     dry_run: bool = False
@@ -1060,7 +1060,7 @@ def organize_today_view(
 
 
 def print_task_changes(
-    tasks: list[TodoistTask],
+    tasks: List[TodoistTask],
     rankings: PriorityRankings,
     dry_run: bool = False
 ) -> None:
