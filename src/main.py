@@ -177,7 +177,7 @@ def list_inbox_tasks(todoist_client: TodoistClient, verbose: bool = False) -> in
         # Summary
         priority_counts = {4: 0, 3: 0, 2: 0, 1: 0}
         for task in inbox_tasks:
-            priority_counts[task.priority] = priority_counts.get(task.priority, 0) + 1
+            priority_counts[task.priority] += 1
         
         print("-" * 60)
         print(f"\n📊 Summary:")
