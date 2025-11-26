@@ -276,7 +276,7 @@ def list_inbox_tasks(todoist_client: TodoistClient, verbose: bool = False) -> in
         # Summary
         priority_counts = {4: 0, 3: 0, 2: 0, 1: 0}
         for task in inbox_tasks:
-            priority_counts[task.priority] = priority_counts.get(task.priority, 0) + 1
+            priority_counts[task.priority] += 1
         
         print("-" * 60)
         print(f"\n📊 Summary:")
@@ -303,9 +303,9 @@ def list_inbox_tasks(todoist_client: TodoistClient, verbose: bool = False) -> in
 
 
 def print_inbox_organization_summary(
-    tasks: list[TodoistTask],
+    tasks: List[TodoistTask],
     organizations: InboxOrganizations,
-    projects: list[TodoistProject],
+    projects: List[TodoistProject],
     dry_run: bool = False
 ) -> None:
     """Print summary of inbox organization suggestions.
@@ -372,7 +372,7 @@ def print_inbox_organization_summary(
         print("-" * 60 + "\n")
         
         for task, org in sorted(tasks_to_move, key=lambda x: (x[1].todoist_priority, x[1].priority_score), reverse=True):
-            project_name = org.project_name or (project_map.get(org.project_id).name if org.project_id and org.project_id in project_map else "Unknown")
+            project_name = org.project_name or (project_map[org.project_id].name if org.project_id and org.project_id in project_map else "Unknown")
             content = task.content[:50] + "..." if len(task.content) > 50 else task.content
             print(f"📝 {content}")
             print(f"   → Move to: {project_name}")
