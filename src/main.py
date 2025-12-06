@@ -2,6 +2,7 @@
 
 import sys
 import logging
+import calendar
 import structlog
 from typing import Optional, List
 from datetime import datetime, timedelta
@@ -81,8 +82,12 @@ def normalize_date_for_comparison(date_str: Optional[str], reference_date: Optio
     elif date_str in ("next week", "in a week"):
         return (ref_date + timedelta(days=7)).strftime("%Y-%m-%d")
     elif date_str in ("next month", "in a month"):
-        # Approximate: add 30 days
-        return (ref_date + timedelta(days=30)).strftime("%Y-%m-%d")
+        # Add one calendar month, clamping to the last day if needed (e.g., Jan 31 -> Feb 28/29)
+        next_month = 1 if ref_date.month == 12 else ref_date.month + 1
+        next_year = ref_date.year + (1 if ref_date.month == 12 else 0)
+        last_day_next_month = calendar.monthrange(next_year, next_month)[1]
+        adjusted_day = min(ref_date.day, last_day_next_month)
+        return ref_date.replace(year=next_year, month=next_month, day=adjusted_day).strftime("%Y-%m-%d")
     
     # If we can't normalize, return None to indicate we should fall back to string comparison
     return None
