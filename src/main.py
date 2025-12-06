@@ -262,10 +262,10 @@ def list_inbox_tasks(todoist_client: TodoistClient, verbose: bool = False) -> in
             
             print(f"{priority_marker} {task.content}")
             
-            if verbose or task.description:
-                if task.description:
-                    desc = task.description[:60] + "..." if len(task.description) > 60 else task.description
-                    print(f"   Description: {desc}")
+            if task.description:
+                desc = task.description[:60] + "..." if len(task.description) > 60 else task.description
+                print(f"   Description: {desc}")
+            
             
             if task.due:
                 due_str = task.due.string or task.due.date
