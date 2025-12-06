@@ -503,7 +503,7 @@ def organize_inbox(
         print("🤖 Analyzing tasks with AI...")
         print("   This may take a moment...\n")
         
-        organizations = ai_ranker.organize_inbox_tasks(inbox_tasks, projects)
+        organizations = ai_ranker.organize_inbox_tasks(inbox_tasks, available_projects)
         
         organized_count = len(organizations.organizations)
         print(f"   Organized {organized_count} task(s)")
