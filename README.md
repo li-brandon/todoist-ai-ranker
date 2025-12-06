@@ -115,6 +115,115 @@ This will display all projects, including:
 - Sub-projects (nested under parent projects)
 - Project colors and view styles
 
+### List Inbox Tasks
+
+List all tasks currently in your Inbox:
+
+```bash
+python -m src.main --list-inbox
+```
+
+With detailed information:
+
+```bash
+python -m src.main --list-inbox --verbose
+```
+
+This will display:
+
+- All tasks in the Inbox
+- Task priorities (P1-P4) with visual markers
+- Due dates (if set)
+- Labels (if any)
+- Task IDs and URLs
+- Summary statistics
+
+### Organize Inbox
+
+Automatically organize all tasks in your Inbox using AI. This feature will:
+
+1. **Assign tasks to the best project** based on task name and description
+2. **Set appropriate due dates** based on urgency and importance
+3. **Update priorities** using the Eisenhower Matrix
+
+**Basic usage:**
+
+```bash
+python -m src.main --organize-inbox
+```
+
+**Dry run (preview only):**
+
+```bash
+python -m src.main --organize-inbox --dry-run
+```
+
+**With verbose output:**
+
+```bash
+python -m src.main --organize-inbox --verbose
+```
+
+The organize-inbox feature will:
+
+1. Fetch all tasks from your Inbox
+2. Fetch all available projects (excluding archived projects)
+3. Use AI to analyze each task and suggest:
+   - The best project to move the task to (or keep in Inbox)
+   - An appropriate due date (or remove if not needed)
+   - Priority level (P1-P4) based on urgency and importance
+4. Display a summary of all suggested changes
+5. Ask for confirmation before applying changes
+6. Apply all changes (move tasks, set due dates, update priorities)
+
+**Example output:**
+
+```
+============================================================
+  Todoist AI Task Ranker
+  Automatically prioritize your tasks using AI
+============================================================
+
+📥 Finding Inbox...
+   Found Inbox (ID: <inbox_project_id>)   # Detected automatically
+
+📋 Fetching tasks from Inbox...
+   Found 8 task(s) in Inbox
+
+📁 Fetching available projects...
+   Found 12 available project(s)
+
+🤖 Analyzing tasks with AI...
+   This may take a moment...
+   Organized 8 task(s)
+
+============================================================
+  Inbox Organization
+============================================================
+
+📊 Summary:
+   Total tasks: 8
+   Tasks to move: 5
+   Tasks staying in Inbox: 3
+   Due dates to set: 6
+   Due dates to remove: 1
+   Priority updates: 7
+
+------------------------------------------------------------
+  📤 Tasks to Move to Projects
+------------------------------------------------------------
+
+📝 Finish quarterly report...
+   → Move to: Work
+   Priority: P1 (score: 95)
+   Due date: tomorrow
+   Reasoning: Priority: Urgent and important work task...
+
+Do you want to organize your Inbox with these suggestions? (y/N):
+```
+
+This feature helps you quickly process your Inbox by automatically categorizing tasks and setting them up for success.
+
 ### Filter Tasks
 
 Rank tasks in a specific project:
