@@ -208,10 +208,14 @@ class InboxOrganizations(BaseModel):
     """Collection of AI-determined organizations for all inbox tasks."""
     
     organizations: List[InboxOrganization]
-    
+    _task_map: Optional[dict] = None
+
+    def _get_task_map(self) -> dict:
+        """Build and cache a map from task_id to InboxOrganization for O(1) lookup."""
+        if self._task_map is None:
+            self._task_map = {org.task_id: org for org in self.organizations}
+        return self._task_map
+
     def get_organization_for_task(self, task_id: str) -> Optional[InboxOrganization]:
-        """Get organization for a specific task."""
-        for org in self.organizations:
-            if org.task_id == task_id:
-                return org
-        return None
+        """Get organization for a specific task using O(1) lookup."""
+        return self._get_task_map().get(task_id)
