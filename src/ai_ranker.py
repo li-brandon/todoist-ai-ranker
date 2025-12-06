@@ -302,7 +302,7 @@ Tasks:
 3. Suggest an appropriate due date based on:
    - Task urgency and importance
    - Task content and context
-   - Use natural language: "today", "tomorrow", "next week", "next month", or specific dates like "2024-12-25"
+   - Use natural language: "today", "tomorrow", "next week", "next month", or specific dates like "YYYY-MM-DD"
    - If no due date is needed, use null
 
 Available projects:
